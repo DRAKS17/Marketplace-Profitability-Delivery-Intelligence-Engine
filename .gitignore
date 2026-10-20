@@ -31,6 +31,9 @@ data/raw/*
 !data/raw/README.md
 data/processed/*
 !data/processed/.gitkeep
+data/power_bi/*
+!data/power_bi/.gitkeep
+!data/power_bi/README.md
 data/external/*
 !data/external/.gitkeep
 
