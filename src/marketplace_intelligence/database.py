@@ -162,6 +162,9 @@ class DatabaseManager:
         fact_df = df[list(fact_cols.keys())].rename(columns=fact_cols).copy()
         fact_df["is_interstate_delivery"] = fact_df["is_interstate_delivery"].astype(bool)
         fact_df["is_delivered"] = fact_df["is_delivered"].astype(bool)
+        fact_df["payment_split_count"] = fact_df["payment_split_count"].fillna(0).astype(int)
+        fact_df["max_payment_installments"] = fact_df["max_payment_installments"].fillna(0).astype(int)
+        fact_df["primary_payment_type"] = fact_df["primary_payment_type"].fillna("unknown")
         fact_df["is_late_delivery"] = fact_df["is_late_delivery"].apply(
             lambda v: bool(v) if pd.notna(v) else None
         )

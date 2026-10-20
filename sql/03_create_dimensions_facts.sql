@@ -107,7 +107,7 @@ CREATE TABLE core.fact_orders (
     -- Payment Metrics
     primary_payment_type VARCHAR(16),
     max_payment_installments INTEGER,
-    payment_split_count INTEGER NOT NULL DEFAULT 1,
+    payment_split_count INTEGER DEFAULT 0,
     
     -- Operational Logistics Metrics
     haversine_distance_km NUMERIC(10, 2),
