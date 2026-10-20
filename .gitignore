@@ -1,0 +1,48 @@
+# ==============================================================================
+# Git Ignore Configuration - Marketplace Profitability & Delivery Intelligence
+# ==============================================================================
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python byte-code and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment Variables & Secrets (CRITICAL: Never commit passwords or connection strings)
+.env
+*.env
+!.env.example
+
+# Jupyter Notebook Checkpoints & runtime
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+*.ipynb[0-9]*
+
+# Data Layer (Store structure via .gitkeep and README, do not track heavy raw CSVs)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+data/processed/*
+!data/processed/.gitkeep
+data/external/*
+!data/external/.gitkeep
+
+# IDEs & System Metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
