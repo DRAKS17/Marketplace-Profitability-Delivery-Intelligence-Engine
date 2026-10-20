@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 logging.basicConfig(
@@ -56,7 +55,9 @@ class TableProfile:
 class DataProfiler:
     """Profiles raw relational CSV datasets with analytical rigor."""
 
-    def __init__(self, raw_dir: Path | str = "data/raw", output_dir: Path | str = "docs"):
+    def __init__(
+        self, raw_dir: Path | str = "data/raw", output_dir: Path | str = "docs"
+    ):
         self.raw_dir = Path(raw_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -64,7 +65,7 @@ class DataProfiler:
 
     def run(self) -> list[TableProfile]:
         """Runs the profiling process across all CSV files in raw_dir."""
-        csv_files = sorted(list(self.raw_dir.glob("*.csv")))
+        csv_files = sorted(self.raw_dir.glob("*.csv"))
         if not csv_files:
             logger.warning(f"No CSV files found in {self.raw_dir.resolve()}")
             return []
@@ -94,7 +95,9 @@ class DataProfiler:
         anomalies: list[str] = []
 
         if exact_dupes > 0:
-            anomalies.append(f"Contains {exact_dupes:,} exact duplicate rows ({exact_dupes / total_rows:.2%}).")
+            anomalies.append(
+                f"Contains {exact_dupes:,} exact duplicate rows ({exact_dupes / total_rows:.2%})."
+            )
 
         # Column-by-column profiling
         for col in df.columns:
@@ -107,9 +110,11 @@ class DataProfiler:
             if is_unique:
                 single_pks.append(col)
 
-            if col.endswith("_id") or col.endswith("_prefix") or col in ["customer_id", "order_id", "product_id", "seller_id"]:
-                if not is_unique:
-                    candidate_fks.append(col)
+            if (
+                col.endswith(("_id", "_prefix"))
+                or col in ["customer_id", "order_id", "product_id", "seller_id"]
+            ) and not is_unique:
+                candidate_fks.append(col)
 
             # Sample values (non-null)
             samples = s.dropna().head(3).tolist()
@@ -129,16 +134,26 @@ class DataProfiler:
                         "std": float(valid_num.std()) if len(valid_num) > 1 else 0.0,
                     }
                     # Suspicious numerical checks
-                    if "price" in col or "payment_value" in col or "freight_value" in col:
+                    if (
+                        "price" in col
+                        or "payment_value" in col
+                        or "freight_value" in col
+                    ):
                         if (valid_num < 0).any():
-                            anomalies.append(f"Column '{col}' has negative monetary values (min: {valid_num.min()}).")
+                            anomalies.append(
+                                f"Column '{col}' has negative monetary values (min: {valid_num.min()})."
+                            )
                         if (valid_num == 0).any():
                             zero_count = int((valid_num == 0).sum())
-                            anomalies.append(f"Column '{col}' has {zero_count} zero-value transactions.")
+                            anomalies.append(
+                                f"Column '{col}' has {zero_count} zero-value transactions."
+                            )
                     if "payment_installments" in col:
                         zero_inst = int((valid_num == 0).sum())
                         if zero_inst > 0:
-                            anomalies.append(f"Column '{col}' has {zero_inst} orders with 0 installments.")
+                            anomalies.append(
+                                f"Column '{col}' has {zero_inst} orders with 0 installments."
+                            )
 
             # Date profiling
             date_indicators = ["_date", "_at", "_timestamp", "shipping_limit_date"]
@@ -149,7 +164,9 @@ class DataProfiler:
                     date_stats = {
                         "min_date": str(valid_dates.min()),
                         "max_date": str(valid_dates.max()),
-                        "invalid_date_strings": int(len(s) - null_count - len(valid_dates)),
+                        "invalid_date_strings": int(
+                            len(s) - null_count - len(valid_dates)
+                        ),
                     }
 
             col_profiles.append(
@@ -174,14 +191,18 @@ class DataProfiler:
             composite_checks["(order_id, order_item_id)"] = len(composite) == total_rows
         elif filepath.name == "olist_order_payments_dataset.csv":
             composite = df[["order_id", "payment_sequential"]].drop_duplicates()
-            composite_checks["(order_id, payment_sequential)"] = len(composite) == total_rows
+            composite_checks["(order_id, payment_sequential)"] = (
+                len(composite) == total_rows
+            )
         elif filepath.name == "olist_order_reviews_dataset.csv":
             composite = df[["review_id", "order_id"]].drop_duplicates()
             composite_checks["(review_id, order_id)"] = len(composite) == total_rows
             review_id_unique = df["review_id"].nunique() == total_rows
             if not review_id_unique:
                 dup_reviews = total_rows - df["review_id"].nunique()
-                anomalies.append(f"review_id is NOT unique (found {dup_reviews:,} duplicated review_ids across different rows).")
+                anomalies.append(
+                    f"review_id is NOT unique (found {dup_reviews:,} duplicated review_ids across different rows)."
+                )
         elif filepath.name == "olist_customers_dataset.csv":
             uniq_customers = df["customer_unique_id"].nunique()
             anomalies.append(
@@ -215,12 +236,16 @@ class DataProfiler:
         print("-" * 90)
 
         for p in self.profiles:
-            pk_str = ", ".join(p.single_pks) if p.single_pks else "None (Composite/External)"
+            pk_str = (
+                ", ".join(p.single_pks) if p.single_pks else "None (Composite/External)"
+            )
             if p.composite_pk_checks:
                 valid_comps = [k for k, v in p.composite_pk_checks.items() if v]
                 if valid_comps:
                     pk_str = f"Composite: {valid_comps[0]}"
-            print(f"{p.filename:<38} | {p.row_count:>9,} | {p.column_count:>4} | {p.memory_mb:>8.2f} | {p.exact_duplicate_rows:>11,} | {pk_str}")
+            print(
+                f"{p.filename:<38} | {p.row_count:>9,} | {p.column_count:>4} | {p.memory_mb:>8.2f} | {p.exact_duplicate_rows:>11,} | {pk_str}"
+            )
         print("=" * 90)
 
     def _generate_markdown_report(self) -> Path:
@@ -247,32 +272,44 @@ class DataProfiler:
                 pk_display = f"`{', '.join(p.single_pks)}`"
             elif p.composite_pk_checks:
                 valid_comps = [f"`{k}`" for k, v in p.composite_pk_checks.items() if v]
-                pk_display = "Composite: " + ", ".join(valid_comps) if valid_comps else "No unique key"
+                pk_display = (
+                    "Composite: " + ", ".join(valid_comps)
+                    if valid_comps
+                    else "No unique key"
+                )
             lines.append(
                 f"| `{p.filename}` | {p.row_count:,} | {p.column_count} | {p.memory_mb:.2f} | {p.exact_duplicate_rows:,} | {pk_display} |"
             )
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 2. Table-by-Table Architectural Findings",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 2. Table-by-Table Architectural Findings",
+                "",
+            ]
+        )
 
         for p in self.profiles:
-            lines.extend([
-                f"### Table: `{p.filename}`",
-                f"- **Shape**: {p.row_count:,} rows × {p.column_count} columns",
-                f"- **In-Memory Size**: {p.memory_mb:.2f} MB",
-                f"- **Exact Duplicate Rows**: {p.exact_duplicate_rows:,}",
-                f"- **Strict Unique Single Column (PK Candidate)**: `{', '.join(p.single_pks) if p.single_pks else 'None'}`",
-            ])
+            lines.extend(
+                [
+                    f"### Table: `{p.filename}`",
+                    f"- **Shape**: {p.row_count:,} rows × {p.column_count} columns",
+                    f"- **In-Memory Size**: {p.memory_mb:.2f} MB",
+                    f"- **Exact Duplicate Rows**: {p.exact_duplicate_rows:,}",
+                    f"- **Strict Unique Single Column (PK Candidate)**: `{', '.join(p.single_pks) if p.single_pks else 'None'}`",
+                ]
+            )
 
             if p.composite_pk_checks:
                 lines.append("- **Composite Key Uniqueness Tests**:")
                 for comp, is_valid in p.composite_pk_checks.items():
-                    status = "✅ Valid (100% Unique & Complete)" if is_valid else "❌ Invalid (Has duplicates)"
+                    status = (
+                        "✅ Valid (100% Unique & Complete)"
+                        if is_valid
+                        else "❌ Invalid (Has duplicates)"
+                    )
                     lines.append(f"  - `{comp}`: {status}")
 
             if p.anomalies:
@@ -280,13 +317,15 @@ class DataProfiler:
                 for anomaly in p.anomalies:
                     lines.append(f"  - ⚠️ {anomaly}")
 
-            lines.extend([
-                "",
-                "**Column Schema & Quality Profile**:",
-                "",
-                "| Column Name | Inferred Dtype | Non-Null | Nulls | Null % | Unique Values | Sample Values |",
-                "|---|---|---|---|---|---|---|",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "**Column Schema & Quality Profile**:",
+                    "",
+                    "| Column Name | Inferred Dtype | Non-Null | Nulls | Null % | Unique Values | Sample Values |",
+                    "|---|---|---|---|---|---|---|",
+                ]
+            )
 
             for col in p.columns:
                 sample_str = ", ".join(str(v) for v in col.sample_values[:2])
@@ -297,13 +336,15 @@ class DataProfiler:
             # Numerical distributions summary
             num_cols = [c for c in p.columns if c.numerical_stats]
             if num_cols:
-                lines.extend([
-                    "",
-                    "**Numerical Distributions Summary**:",
-                    "",
-                    "| Numeric Column | Min | 25% / Median | Mean | Max | Std Dev |",
-                    "|---|---|---|---|---|---|",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "**Numerical Distributions Summary**:",
+                        "",
+                        "| Numeric Column | Min | 25% / Median | Mean | Max | Std Dev |",
+                        "|---|---|---|---|---|---|",
+                    ]
+                )
                 for nc in num_cols:
                     st = nc.numerical_stats
                     lines.append(
@@ -313,13 +354,15 @@ class DataProfiler:
             # Date ranges summary
             date_cols = [c for c in p.columns if c.date_stats]
             if date_cols:
-                lines.extend([
-                    "",
-                    "**Temporal Boundaries (Date Ranges)**:",
-                    "",
-                    "| Date Column | Earliest Timestamp | Latest Timestamp | Parsing Issues |",
-                    "|---|---|---|---|",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "**Temporal Boundaries (Date Ranges)**:",
+                        "",
+                        "| Date Column | Earliest Timestamp | Latest Timestamp | Parsing Issues |",
+                        "|---|---|---|---|",
+                    ]
+                )
                 for dc in date_cols:
                     ds = dc.date_stats
                     lines.append(
@@ -328,15 +371,17 @@ class DataProfiler:
 
             lines.append("\n---\n")
 
-        lines.extend([
-            "## 3. High-Priority Data Architecture Takeaways",
-            "",
-            "1. **Order vs Order Item Granularity**: `olist_orders_dataset.csv` contains 99,441 unique orders. However, `olist_order_items_dataset.csv` contains 112,650 line items. Merging items directly with orders without aggregation creates duplicate order records and inflates revenue calculations.",
-            "2. **Customer Identity Decoupling**: In `olist_customers_dataset.csv`, `customer_id` is unique per order (99,441), but represents only 96,096 distinct human beings (`customer_unique_id`). Repeat purchase analyses must use `customer_unique_id`.",
-            "3. **Duplicate Review IDs Trap**: In `olist_order_reviews_dataset.csv`, `review_id` is NOT unique (total 104,719 rows, but only 98,410 unique review IDs). Some orders generated multiple reviews or a single review surveyed multiple orders.",
-            "4. **High-Frequency Coordinate Redundancy**: `olist_geolocation_dataset.csv` has 1,000,164 records with 261,831 exact duplicate rows. Zip code prefixes have hundreds of slightly differing latitude/longitude points that require spatial deduplication.",
-            "5. **Order Lifecycle Nulls**: In `olist_orders_dataset.csv`, `order_delivered_customer_date` has 2,965 nulls. These are NOT dirty records; they represent canceled, unavailable, or in-transit orders.",
-        ])
+        lines.extend(
+            [
+                "## 3. High-Priority Data Architecture Takeaways",
+                "",
+                "1. **Order vs Order Item Granularity**: `olist_orders_dataset.csv` contains 99,441 unique orders. However, `olist_order_items_dataset.csv` contains 112,650 line items. Merging items directly with orders without aggregation creates duplicate order records and inflates revenue calculations.",
+                "2. **Customer Identity Decoupling**: In `olist_customers_dataset.csv`, `customer_id` is unique per order (99,441), but represents only 96,096 distinct human beings (`customer_unique_id`). Repeat purchase analyses must use `customer_unique_id`.",
+                "3. **Duplicate Review IDs Trap**: In `olist_order_reviews_dataset.csv`, `review_id` is NOT unique (total 104,719 rows, but only 98,410 unique review IDs). Some orders generated multiple reviews or a single review surveyed multiple orders.",
+                "4. **High-Frequency Coordinate Redundancy**: `olist_geolocation_dataset.csv` has 1,000,164 records with 261,831 exact duplicate rows. Zip code prefixes have hundreds of slightly differing latitude/longitude points that require spatial deduplication.",
+                "5. **Order Lifecycle Nulls**: In `olist_orders_dataset.csv`, `order_delivered_customer_date` has 2,965 nulls. These are NOT dirty records; they represent canceled, unavailable, or in-transit orders.",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))

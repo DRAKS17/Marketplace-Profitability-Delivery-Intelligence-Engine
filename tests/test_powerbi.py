@@ -16,6 +16,11 @@ PROCESSED_DIR = Path("data/processed")
 DOCS_DIR = Path("docs")
 SQL_DIR = Path("sql")
 
+pytestmark = pytest.mark.skipif(
+    not (POWERBI_DIR / "fact_order_intelligence.csv").exists(),
+    reason="Power BI extract CSVs not present in environment",
+)
+
 
 @pytest.fixture(scope="module")
 def exporter():
@@ -41,7 +46,9 @@ def test_powerbi_csv_files_exist_and_populated():
         file_path = POWERBI_DIR / filename
         assert file_path.exists(), f"Missing required Power BI CSV: {filename}"
         df = pd.read_csv(file_path)
-        assert len(df) >= min_expected_rows, f"{filename} row count {len(df)} < expected {min_expected_rows}"
+        assert len(df) >= min_expected_rows, (
+            f"{filename} row count {len(df)} < expected {min_expected_rows}"
+        )
 
 
 def test_fact_order_intelligence_schema():
@@ -66,11 +73,20 @@ def test_fact_order_intelligence_schema():
         "csat_category",
     ]
     for col in required_cols:
-        assert col in df.columns, f"Missing required column '{col}' in fact_order_intelligence.csv"
+        assert col in df.columns, (
+            f"Missing required column '{col}' in fact_order_intelligence.csv"
+        )
 
     # Macro regions must be 100% mapped without nulls
     assert df["customer_macro_region"].notna().all()
-    valid_regions = {"Southeast", "South", "Northeast", "Central-West", "North", "Other"}
+    valid_regions = {
+        "Southeast",
+        "South",
+        "Northeast",
+        "Central-West",
+        "North",
+        "Other",
+    }
     assert set(df["customer_macro_region"].unique()).issubset(valid_regions)
 
 
@@ -79,18 +95,24 @@ def test_postgres_powerbi_views():
     db_engine = get_postgres_engine()
     with db_engine.connect() as conn:
         # 1. Orders view
-        v1_count = conn.execute(text("SELECT COUNT(*) FROM mart.view_powerbi_orders;")).scalar()
+        v1_count = conn.execute(
+            text("SELECT COUNT(*) FROM mart.view_powerbi_orders;")
+        ).scalar()
         assert v1_count == 99441
 
         # 2. Monthly trend view
         v2_rows = conn.execute(
-            text("SELECT year_month, total_orders, total_gmv_brl FROM mart.view_powerbi_monthly_trend;")
+            text(
+                "SELECT year_month, total_orders, total_gmv_brl FROM mart.view_powerbi_monthly_trend;"
+            )
         ).fetchall()
         assert len(v2_rows) >= 20
 
         # 3. Regional logistics view
         v3_rows = conn.execute(
-            text("SELECT customer_state, total_orders, avg_ovi FROM mart.view_powerbi_regional_logistics;")
+            text(
+                "SELECT customer_state, total_orders, avg_ovi FROM mart.view_powerbi_regional_logistics;"
+            )
         ).fetchall()
         assert len(v3_rows) == 27
 

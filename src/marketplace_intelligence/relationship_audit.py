@@ -27,13 +27,21 @@ def audit_relationships(raw_dir: Path | str = "data/raw") -> dict[str, any]:
 
     customers = pd.read_csv(raw_path / "olist_customers_dataset.csv", low_memory=False)
     orders = pd.read_csv(raw_path / "olist_orders_dataset.csv", low_memory=False)
-    order_items = pd.read_csv(raw_path / "olist_order_items_dataset.csv", low_memory=False)
-    payments = pd.read_csv(raw_path / "olist_order_payments_dataset.csv", low_memory=False)
-    reviews = pd.read_csv(raw_path / "olist_order_reviews_dataset.csv", low_memory=False)
+    order_items = pd.read_csv(
+        raw_path / "olist_order_items_dataset.csv", low_memory=False
+    )
+    payments = pd.read_csv(
+        raw_path / "olist_order_payments_dataset.csv", low_memory=False
+    )
+    reviews = pd.read_csv(
+        raw_path / "olist_order_reviews_dataset.csv", low_memory=False
+    )
     products = pd.read_csv(raw_path / "olist_products_dataset.csv", low_memory=False)
     sellers = pd.read_csv(raw_path / "olist_sellers_dataset.csv", low_memory=False)
     geo = pd.read_csv(raw_path / "olist_geolocation_dataset.csv", low_memory=False)
-    translations = pd.read_csv(raw_path / "product_category_name_translation.csv", low_memory=False)
+    translations = pd.read_csv(
+        raw_path / "product_category_name_translation.csv", low_memory=False
+    )
 
     audit_results: dict[str, any] = {}
 
@@ -56,7 +64,9 @@ def audit_relationships(raw_dir: Path | str = "data/raw") -> dict[str, any]:
     audit_results["customer_unique_id_cardinality"] = {
         "total_human_customers": int(customers["customer_unique_id"].nunique()),
         "repeat_customers_count": repeat_customers,
-        "repeat_customer_rate_pct": round((repeat_customers / len(orders_per_human)) * 100, 2),
+        "repeat_customer_rate_pct": round(
+            (repeat_customers / len(orders_per_human)) * 100, 2
+        ),
         "max_orders_by_one_customer": max_orders_single_human,
     }
 
@@ -121,10 +131,14 @@ def audit_relationships(raw_dir: Path | str = "data/raw") -> dict[str, any]:
     }
 
     # 8. Products -> Category Translation
-    untranslated_categories = set(products["product_category_name"].dropna()) - set(translations["product_category_name"])
+    untranslated_categories = set(products["product_category_name"].dropna()) - set(
+        translations["product_category_name"]
+    )
     audit_results["product_category_translations"] = {
-        "total_categories_in_products": int(products["product_category_name"].nunique()),
-        "categories_in_translations": int(len(translations)),
+        "total_categories_in_products": int(
+            products["product_category_name"].nunique()
+        ),
+        "categories_in_translations": len(translations),
         "untranslated_categories": list(untranslated_categories),
     }
 
@@ -177,8 +191,12 @@ def audit_relationships(raw_dir: Path | str = "data/raw") -> dict[str, any]:
             "result_rows": naive_row_count,
             "inflated_item_value": round(float(naive_inflated_item_value), 2),
             "inflated_payment_value": round(float(naive_inflated_payment_total), 2),
-            "item_inflation_factor": round(float(naive_inflated_item_value / true_item_value), 2),
-            "payment_inflation_factor": round(float(naive_inflated_payment_total / true_payment_total), 2),
+            "item_inflation_factor": round(
+                float(naive_inflated_item_value / true_item_value), 2
+            ),
+            "payment_inflation_factor": round(
+                float(naive_inflated_payment_total / true_payment_total), 2
+            ),
         },
     }
 
@@ -198,10 +216,14 @@ def audit_relationships(raw_dir: Path | str = "data/raw") -> dict[str, any]:
     audit_results["macro_fanout"] = {
         "true_total_merchandise_value": round(total_true_item_price, 2),
         "naive_joined_total_merchandise_value": round(macro_inflated_price, 2),
-        "merchandise_inflation_amount": round(macro_inflated_price - total_true_item_price, 2),
+        "merchandise_inflation_amount": round(
+            macro_inflated_price - total_true_item_price, 2
+        ),
         "true_total_payment_value": round(total_true_payment_value, 2),
         "naive_joined_total_payment_value": round(macro_inflated_payments, 2),
-        "payment_inflation_amount": round(macro_inflated_payments - total_true_payment_value, 2),
+        "payment_inflation_amount": round(
+            macro_inflated_payments - total_true_payment_value, 2
+        ),
     }
 
     return audit_results
@@ -213,31 +235,43 @@ def print_audit_summary(results: dict[str, any]) -> None:
     print(" RELATIONAL INTEGRITY & FOREIGN KEY AUDIT RESULTS")
     print("=" * 90)
 
-    for rel, data in results.items():
+    for data in results.values():
         if isinstance(data, dict) and "child" in data and "parent" in data:
-            print(f"Relationship: {data['child']} -> {data['parent']} ON ({data['key']})")
-            print(f"  - Orphan Records: {data['orphan_count']} (100% Referential Integrity maintained)")
+            print(
+                f"Relationship: {data['child']} -> {data['parent']} ON ({data['key']})"
+            )
+            print(
+                f"  - Orphan Records: {data['orphan_count']} (100% Referential Integrity maintained)"
+            )
             if "orders_without_items" in data:
-                print(f"  - Orders without Items (e.g. canceled before itemization): {data['orders_without_items']}")
+                print(
+                    f"  - Orders without Items (e.g. canceled before itemization): {data['orders_without_items']}"
+                )
             if "orders_without_payments" in data:
                 print(f"  - Orders without Payments: {data['orders_without_payments']}")
             if "orders_without_reviews" in data:
-                print(f"  - Orders without Customer Reviews: {data['orders_without_reviews']}")
+                print(
+                    f"  - Orders without Customer Reviews: {data['orders_without_reviews']}"
+                )
             print("-" * 90)
 
     # Customer Unique ID Cardinality
     c_card = results.get("customer_unique_id_cardinality", {})
     if c_card:
-        print(f"Customer Identity Cardinality:")
+        print("Customer Identity Cardinality:")
         print(f"  - Total Human Customers: {c_card['total_human_customers']:,}")
-        print(f"  - Repeat Customers: {c_card['repeat_customers_count']:,} ({c_card['repeat_customer_rate_pct']}%)")
-        print(f"  - Max Orders by a Single Customer: {c_card['max_orders_by_one_customer']}")
+        print(
+            f"  - Repeat Customers: {c_card['repeat_customers_count']:,} ({c_card['repeat_customer_rate_pct']}%)"
+        )
+        print(
+            f"  - Max Orders by a Single Customer: {c_card['max_orders_by_one_customer']}"
+        )
         print("-" * 90)
 
     # Category Translations
     cat = results.get("product_category_translations", {})
     if cat:
-        print(f"Product Category Translations:")
+        print("Product Category Translations:")
         print(f"  - Total Product Categories: {cat['total_categories_in_products']}")
         print(f"  - Translated in mapping file: {cat['categories_in_translations']}")
         print(f"  - Untranslated Categories: {cat['untranslated_categories']}")
@@ -246,9 +280,13 @@ def print_audit_summary(results: dict[str, any]) -> None:
     # Geolocation Coverage
     geo_cov = results.get("geolocation_coverage", {})
     if geo_cov:
-        print(f"Geolocation Reference Coverage:")
-        print(f"  - Customer Zip Prefixes Missing in Geolocation: {geo_cov['customer_zip_prefixes_missing_in_geo']}")
-        print(f"  - Seller Zip Prefixes Missing in Geolocation: {geo_cov['seller_zip_prefixes_missing_in_geo']}")
+        print("Geolocation Reference Coverage:")
+        print(
+            f"  - Customer Zip Prefixes Missing in Geolocation: {geo_cov['customer_zip_prefixes_missing_in_geo']}"
+        )
+        print(
+            f"  - Seller Zip Prefixes Missing in Geolocation: {geo_cov['seller_zip_prefixes_missing_in_geo']}"
+        )
         print("-" * 90)
 
     print("\n" + "=" * 90)
@@ -260,23 +298,47 @@ def print_audit_summary(results: dict[str, any]) -> None:
     nm = fanout["naive_joined_metrics"]
 
     print(f"Case Study: Order ID '{sample_id}'")
-    print(f"  True State:")
-    print(f"    - Items count: {tm['item_records']} | True Item Price Sum: ${tm['total_items_price']}")
-    print(f"    - Payment records: {tm['payment_records']} | True Payments Collected: ${tm['total_payment_collected']}")
-    print(f"  Naive Join Result (Joining items directly to payments without aggregation):")
-    print(f"    - Resulting rows: {nm['result_rows']} (Cartesian Product: {tm['item_records']} items × {tm['payment_records']} payments = {nm['result_rows']} rows)")
-    print(f"    - Inflated Item Value Sum: ${nm['inflated_item_value']} (Inflated by {nm['item_inflation_factor']}x)")
-    print(f"    - Inflated Payment Value Sum: ${nm['inflated_payment_value']} (Inflated by {nm['payment_inflation_factor']}x)")
+    print("  True State:")
+    print(
+        f"    - Items count: {tm['item_records']} | True Item Price Sum: ${tm['total_items_price']}"
+    )
+    print(
+        f"    - Payment records: {tm['payment_records']} | True Payments Collected: ${tm['total_payment_collected']}"
+    )
+    print(
+        "  Naive Join Result (Joining items directly to payments without aggregation):"
+    )
+    print(
+        f"    - Resulting rows: {nm['result_rows']} (Cartesian Product: {tm['item_records']} items × {tm['payment_records']} payments = {nm['result_rows']} rows)"
+    )
+    print(
+        f"    - Inflated Item Value Sum: ${nm['inflated_item_value']} (Inflated by {nm['item_inflation_factor']}x)"
+    )
+    print(
+        f"    - Inflated Payment Value Sum: ${nm['inflated_payment_value']} (Inflated by {nm['payment_inflation_factor']}x)"
+    )
 
     print("-" * 90)
     macro = results["macro_fanout"]
-    print(f"MACRO IMPACT ACROSS ENTIRE MARKETPLACE:")
-    print(f"  - True Total Merchandise Value:  ${macro['true_total_merchandise_value']:>14,f}")
-    print(f"  - Naive Joined Total GMV:        ${macro['naive_joined_total_merchandise_value']:>14,f}")
-    print(f"  - Financial Phantom Overstatement: +${macro['merchandise_inflation_amount']:>13,f}")
-    print(f"  - True Total Payments Collected: ${macro['true_total_payment_value']:>14,f}")
-    print(f"  - Naive Joined Total Payments:   ${macro['naive_joined_total_payment_value']:>14,f}")
-    print(f"  - Payment Phantom Overstatement:  +${macro['payment_inflation_amount']:>13,f}")
+    print("MACRO IMPACT ACROSS ENTIRE MARKETPLACE:")
+    print(
+        f"  - True Total Merchandise Value:  ${macro['true_total_merchandise_value']:>14,f}"
+    )
+    print(
+        f"  - Naive Joined Total GMV:        ${macro['naive_joined_total_merchandise_value']:>14,f}"
+    )
+    print(
+        f"  - Financial Phantom Overstatement: +${macro['merchandise_inflation_amount']:>13,f}"
+    )
+    print(
+        f"  - True Total Payments Collected: ${macro['true_total_payment_value']:>14,f}"
+    )
+    print(
+        f"  - Naive Joined Total Payments:   ${macro['naive_joined_total_payment_value']:>14,f}"
+    )
+    print(
+        f"  - Payment Phantom Overstatement:  +${macro['payment_inflation_amount']:>13,f}"
+    )
     print("=" * 90)
 
 

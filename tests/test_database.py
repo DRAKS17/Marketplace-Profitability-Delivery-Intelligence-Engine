@@ -11,7 +11,24 @@ Tests verify:
 
 import pytest
 from sqlalchemy import text
+
 from src.marketplace_intelligence.database import get_postgres_engine
+
+
+def _is_postgres_available() -> bool:
+    try:
+        engine = get_postgres_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _is_postgres_available(),
+    reason="PostgreSQL marketplace_analytics database not accessible",
+)
 
 
 @pytest.fixture(scope="module")
@@ -32,9 +49,15 @@ def test_database_connection(db_engine):
 def test_schemas_exist(db_engine):
     """Confirms all three architectural schemas exist."""
     with db_engine.connect() as conn:
-        schemas = conn.execute(
-            text("SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('stg', 'core', 'mart')")
-        ).scalars().all()
+        schemas = (
+            conn.execute(
+                text(
+                    "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('stg', 'core', 'mart')"
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert set(schemas) == {"stg", "core", "mart"}
 
 
@@ -50,7 +73,9 @@ def test_dimensional_table_row_counts(db_engine):
     with db_engine.connect() as conn:
         for table, expected_cnt in expected.items():
             actual = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
-            assert actual == expected_cnt, f"{table} expected {expected_cnt:,} rows, found {actual:,}."
+            assert actual == expected_cnt, (
+                f"{table} expected {expected_cnt:,} rows, found {actual:,}."
+            )
 
 
 def test_fact_table_row_counts(db_engine):
@@ -64,7 +89,9 @@ def test_fact_table_row_counts(db_engine):
     with db_engine.connect() as conn:
         for table, expected_cnt in expected.items():
             actual = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
-            assert actual == expected_cnt, f"{table} expected {expected_cnt:,} rows, found {actual:,}."
+            assert actual == expected_cnt, (
+                f"{table} expected {expected_cnt:,} rows, found {actual:,}."
+            )
 
 
 def test_foreign_key_referential_integrity(db_engine):
@@ -77,7 +104,9 @@ def test_foreign_key_referential_integrity(db_engine):
                 WHERE c.customer_key IS NULL
             """)
         ).scalar()
-        assert orphan_customers == 0, "Found orphan customer foreign keys in fact_orders."
+        assert orphan_customers == 0, (
+            "Found orphan customer foreign keys in fact_orders."
+        )
 
         orphan_dates = conn.execute(
             text("""
@@ -98,6 +127,8 @@ def test_zero_fanout_financial_reconciliation(db_engine):
         item_gmv = conn.execute(
             text("SELECT ROUND(SUM(price), 2) FROM core.fact_order_items")
         ).scalar()
-        
+
         diff = abs(float(order_gmv) - float(item_gmv))
-        assert diff == 0.0, f"Financial reconciliation failed! Orders GMV: {order_gmv}, Items GMV: {item_gmv}, Diff: {diff}"
+        assert diff == 0.0, (
+            f"Financial reconciliation failed! Orders GMV: {order_gmv}, Items GMV: {item_gmv}, Diff: {diff}"
+        )

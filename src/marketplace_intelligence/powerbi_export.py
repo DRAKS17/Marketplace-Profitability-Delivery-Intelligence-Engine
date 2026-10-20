@@ -113,12 +113,20 @@ class PowerBIExporter:
         df_fact = pd.merge(df_orders, rev_order, on="order_id", how="left")
 
         # Macro region mapping
-        df_fact["customer_macro_region"] = df_fact["customer_state"].map(MACRO_REGION_MAP).fillna("Other")
-        df_fact["seller_macro_region"] = df_fact["seller_state"].map(MACRO_REGION_MAP).fillna("Other")
+        df_fact["customer_macro_region"] = (
+            df_fact["customer_state"].map(MACRO_REGION_MAP).fillna("Other")
+        )
+        df_fact["seller_macro_region"] = (
+            df_fact["seller_state"].map(MACRO_REGION_MAP).fillna("Other")
+        )
 
         # Format dates for Power BI calendar relationships
-        df_fact["order_purchase_date"] = pd.to_datetime(df_fact["order_purchase_timestamp"]).dt.date
-        df_fact["order_purchase_year_month"] = pd.to_datetime(df_fact["order_purchase_timestamp"]).dt.strftime("%Y-%m")
+        df_fact["order_purchase_date"] = pd.to_datetime(
+            df_fact["order_purchase_timestamp"]
+        ).dt.date
+        df_fact["order_purchase_year_month"] = pd.to_datetime(
+            df_fact["order_purchase_timestamp"]
+        ).dt.strftime("%Y-%m")
 
         # -------------------------------------------------------------
         # 1. Fact Table: fact_order_intelligence.csv
@@ -180,17 +188,19 @@ class PowerBIExporter:
         min_date = df_fact["order_purchase_date"].min()
         max_date = df_fact["order_purchase_date"].max()
         dates = pd.date_range(min_date, max_date, freq="D")
-        df_date = pd.DataFrame({
-            "date": dates.date,
-            "year": dates.year,
-            "quarter": "Q" + dates.quarter.astype(str),
-            "month": dates.month,
-            "month_name": dates.strftime("%B"),
-            "year_month": dates.strftime("%Y-%m"),
-            "day": dates.day,
-            "day_of_week": dates.day_name(),
-            "is_weekend": dates.dayofweek.isin([5, 6]),
-        })
+        df_date = pd.DataFrame(
+            {
+                "date": dates.date,
+                "year": dates.year,
+                "quarter": "Q" + dates.quarter.astype(str),
+                "month": dates.month,
+                "month_name": dates.strftime("%B"),
+                "year_month": dates.strftime("%Y-%m"),
+                "day": dates.day,
+                "day_of_week": dates.day_name(),
+                "is_weekend": dates.dayofweek.isin([5, 6]),
+            }
+        )
         date_path = self.powerbi_dir / "dim_date.csv"
         df_date.to_csv(date_path, index=False)
         logger.info(f"Exported {len(df_date):,} dates to {date_path.resolve()}")
@@ -201,12 +211,14 @@ class PowerBIExporter:
         geo_data = []
         for state, region in MACRO_REGION_MAP.items():
             state_orders = df_fact[df_fact["customer_state"] == state]
-            geo_data.append({
-                "state_code": state,
-                "macro_region": region,
-                "total_orders": len(state_orders),
-                "total_gmv": float(state_orders["order_total_item_value"].sum()),
-            })
+            geo_data.append(
+                {
+                    "state_code": state,
+                    "macro_region": region,
+                    "total_orders": len(state_orders),
+                    "total_gmv": float(state_orders["order_total_item_value"].sum()),
+                }
+            )
         df_geo = pd.DataFrame(geo_data)
         geo_path = self.powerbi_dir / "dim_geography.csv"
         df_geo.to_csv(geo_path, index=False)
@@ -221,8 +233,14 @@ class PowerBIExporter:
                 total_orders=("order_id", "count"),
                 total_gmv=("order_total_item_value", "sum"),
                 avg_ovi=("operational_vulnerability_index", "mean"),
-                danger_zone_orders=("strategic_quadrant", lambda s: (s.str.startswith("Q2")).sum()),
-                crown_jewel_orders=("strategic_quadrant", lambda s: (s.str.startswith("Q1")).sum()),
+                danger_zone_orders=(
+                    "strategic_quadrant",
+                    lambda s: (s.str.startswith("Q2")).sum(),
+                ),
+                crown_jewel_orders=(
+                    "strategic_quadrant",
+                    lambda s: (s.str.startswith("Q1")).sum(),
+                ),
                 actual_late_rate=("is_late_delivery", "mean"),
                 avg_csat=("review_score", "mean"),
             )
@@ -233,7 +251,9 @@ class PowerBIExporter:
         ) * 100.0
         seller_path = self.powerbi_dir / "dim_seller_summary.csv"
         seller_summary.to_csv(seller_path, index=False)
-        logger.info(f"Exported {len(seller_summary):,} sellers to {seller_path.resolve()}")
+        logger.info(
+            f"Exported {len(seller_summary):,} sellers to {seller_path.resolve()}"
+        )
 
         # -------------------------------------------------------------
         # 5. Dimension: dim_category_summary.csv
@@ -275,14 +295,24 @@ class PowerBIExporter:
                 conn.execute(text(stmt))
 
         with engine.connect() as conn:
-            v1_count = conn.execute(text("SELECT COUNT(*) FROM mart.view_powerbi_orders;")).scalar()
-            v2_count = conn.execute(text("SELECT COUNT(*) FROM mart.view_powerbi_monthly_trend;")).scalar()
-            v3_count = conn.execute(text("SELECT COUNT(*) FROM mart.view_powerbi_regional_logistics;")).scalar()
+            v1_count = conn.execute(
+                text("SELECT COUNT(*) FROM mart.view_powerbi_orders;")
+            ).scalar()
+            v2_count = conn.execute(
+                text("SELECT COUNT(*) FROM mart.view_powerbi_monthly_trend;")
+            ).scalar()
+            v3_count = conn.execute(
+                text("SELECT COUNT(*) FROM mart.view_powerbi_regional_logistics;")
+            ).scalar()
 
             logger.info("Power BI Views deployed and verified in PostgreSQL:")
             logger.info(f"  - mart.view_powerbi_orders: {v1_count:,} rows")
-            logger.info(f"  - mart.view_powerbi_monthly_trend: {v2_count:,} monthly cohorts")
-            logger.info(f"  - mart.view_powerbi_regional_logistics: {v3_count:,} state profiles")
+            logger.info(
+                f"  - mart.view_powerbi_monthly_trend: {v2_count:,} monthly cohorts"
+            )
+            logger.info(
+                f"  - mart.view_powerbi_regional_logistics: {v3_count:,} state profiles"
+            )
 
     def generate_architecture_doc(self) -> Path:
         """Authors full architectural and DAX specification guide in docs/power_bi_architecture.md."""
@@ -389,7 +419,7 @@ class PowerBIExporter:
             "",
             "-- Danger Zone (Q2) GMV",
             "Danger Zone GMV = ",
-            "CALCULATE([Total GMV], LEFT(fact_order_intelligence[strategic_quadrant], 2) = \"Q2\")",
+            'CALCULATE([Total GMV], LEFT(fact_order_intelligence[strategic_quadrant], 2) = "Q2")',
             "",
             "-- Danger Zone GMV Share (%)",
             "Danger Zone GMV Share Pct = ",
@@ -397,7 +427,7 @@ class PowerBIExporter:
             "",
             "-- Crown Jewels (Q1) GMV Share (%)",
             "Crown Jewels GMV Share Pct = ",
-            "DIVIDE(CALCULATE([Total GMV], LEFT(fact_order_intelligence[strategic_quadrant], 2) = \"Q1\"), [Total GMV], 0) * 100",
+            'DIVIDE(CALCULATE([Total GMV], LEFT(fact_order_intelligence[strategic_quadrant], 2) = "Q1"), [Total GMV], 0) * 100',
             "",
             "-- High Vulnerability Orders (OVI >= 50)",
             "High Vulnerability Orders = ",

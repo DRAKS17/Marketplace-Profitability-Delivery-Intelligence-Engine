@@ -64,7 +64,9 @@ class RiskScoringEngine:
 
         model_path = self.models_dir / "decision_tree_late_delivery.joblib"
         if not model_path.exists():
-            raise FileNotFoundError(f"Trained model not found at {model_path}. Run Phase 12 first.")
+            raise FileNotFoundError(
+                f"Trained model not found at {model_path}. Run Phase 12 first."
+            )
 
         logger.info(f"Loading trained Decision Tree pipeline from {model_path}...")
         pipeline = joblib.load(model_path)
@@ -72,7 +74,9 @@ class RiskScoringEngine:
 
     def score_all_orders(self, df: pd.DataFrame, pipeline: any) -> pd.DataFrame:
         """Computes late probability, OVI components, expected contribution, and quadrants."""
-        logger.info(f"Scoring {len(df):,} orders across risk and commercial dimensions...")
+        logger.info(
+            f"Scoring {len(df):,} orders across risk and commercial dimensions..."
+        )
         scored = df.copy()
 
         # Format boolean columns for model pipeline
@@ -92,7 +96,9 @@ class RiskScoringEngine:
 
         # 2. COMPOSITE OPERATIONAL VULNERABILITY INDEX (OVI) [0 to 100]
         # Weighting: Delay Risk (40%) + Freight Friction (25%) + Merchant Reliability (20%) + Route (15%)
-        scored["delay_risk_score"] = np.round(scored["predicted_late_probability"] * 40.0, 2)
+        scored["delay_risk_score"] = np.round(
+            scored["predicted_late_probability"] * 40.0, 2
+        )
 
         # Freight friction (penalize orders where shipping represents over 50% of basket)
         freight_ratio_clipped = np.clip(scored["freight_ratio"] / 0.50, 0.0, 1.0)
@@ -133,16 +139,24 @@ class RiskScoringEngine:
             "High Vulnerability",
             "Critical Vulnerability",
         ]
-        scored["vulnerability_tier"] = np.select(conditions_vuln, choices_vuln, default="Moderate Vulnerability")
+        scored["vulnerability_tier"] = np.select(
+            conditions_vuln, choices_vuln, default="Moderate Vulnerability"
+        )
 
         # 3. COMMERCIAL PROFITABILITY & EXPECTED CONTRIBUTION
         # Platform Take-rate: 12% on GMV
-        scored["gross_platform_revenue_brl"] = np.round(scored["order_total_item_value"] * 0.12, 2)
+        scored["gross_platform_revenue_brl"] = np.round(
+            scored["order_total_item_value"] * 0.12, 2
+        )
 
         # Gateway interchange: 2% on credit card, 1% on Boleto/Debit/Voucher
         is_credit_card = scored["primary_payment_type"] == "credit_card"
         scored["payment_processing_fee_brl"] = np.round(
-            np.where(is_credit_card, scored["order_total_value"] * 0.02, scored["order_total_value"] * 0.01),
+            np.where(
+                is_credit_card,
+                scored["order_total_value"] * 0.02,
+                scored["order_total_value"] * 0.01,
+            ),
             2,
         )
 
@@ -174,7 +188,9 @@ class RiskScoringEngine:
             "Low Contribution ($0 - $5)",
             "Unprofitable / Loss (< $0)",
         ]
-        scored["profitability_tier"] = np.select(conditions_profit, choices_profit, default="Low Contribution ($0 - $5)")
+        scored["profitability_tier"] = np.select(
+            conditions_profit, choices_profit, default="Low Contribution ($0 - $5)"
+        )
 
         # 4. STRATEGIC PROFIT-RISK QUADRANTS (2x2 Matrix)
         # High Contribution: Expected CM >= $5.00 BRL
@@ -184,7 +200,7 @@ class RiskScoringEngine:
 
         conditions_quadrant = [
             is_high_cm & (~is_high_ovi),  # High Margin, Low Risk
-            is_high_cm & is_high_ovi,     # High Margin, High Risk
+            is_high_cm & is_high_ovi,  # High Margin, High Risk
             (~is_high_cm) & is_high_ovi,  # Low Margin, High Risk
             (~is_high_cm) & (~is_high_ovi),  # Low Margin, Low Risk
         ]
@@ -194,7 +210,11 @@ class RiskScoringEngine:
             "Q3: Value Drains (Low Profit, High Risk)",
             "Q4: Steady Workhorses (Low Profit, Low Risk)",
         ]
-        scored["strategic_quadrant"] = np.select(conditions_quadrant, choices_quadrant, default="Q4: Steady Workhorses (Low Profit, Low Risk)")
+        scored["strategic_quadrant"] = np.select(
+            conditions_quadrant,
+            choices_quadrant,
+            default="Q4: Steady Workhorses (Low Profit, Low Risk)",
+        )
 
         # Actual outcomes for reporting and validation
         scored["actual_is_delivered"] = scored["is_delivered"]
@@ -262,12 +282,16 @@ class RiskScoringEngine:
         ]
 
         df_mart = df_scored[mart_columns].copy()
-        df_mart["is_interstate_delivery"] = df_mart["is_interstate_delivery"].astype(bool)
+        df_mart["is_interstate_delivery"] = df_mart["is_interstate_delivery"].astype(
+            bool
+        )
         df_mart["actual_is_delivered"] = df_mart["actual_is_delivered"].astype(bool)
 
         # 3. Bulk insert in chunks (chunksize 2,000 to respect PostgreSQL 65,535 parameter limit)
         chunksize = 2000
-        logger.info(f"Bulk loading {len(df_mart):,} rows into mart.order_risk_profile (chunksize={chunksize})...")
+        logger.info(
+            f"Bulk loading {len(df_mart):,} rows into mart.order_risk_profile (chunksize={chunksize})..."
+        )
         df_mart.to_sql(
             name="order_risk_profile",
             schema="mart",
@@ -279,16 +303,22 @@ class RiskScoringEngine:
         )
 
         with engine.connect() as conn:
-            row_count = conn.execute(text("SELECT COUNT(*) FROM mart.order_risk_profile;")).scalar()
+            row_count = conn.execute(
+                text("SELECT COUNT(*) FROM mart.order_risk_profile;")
+            ).scalar()
             logger.info(f"Verified {row_count:,} records in mart.order_risk_profile.")
 
             # Validate analytical view
             view_summary = conn.execute(
-                text("SELECT strategic_quadrant, total_orders, gmv_share_pct, actual_late_rate_pct FROM mart.view_quadrant_executive_summary;")
+                text(
+                    "SELECT strategic_quadrant, total_orders, gmv_share_pct, actual_late_rate_pct FROM mart.view_quadrant_executive_summary;"
+                )
             ).fetchall()
             logger.info("mart.view_quadrant_executive_summary verified successfully:")
             for row in view_summary:
-                logger.info(f"  - {row[0]}: {row[1]:,} orders, {row[2]}% GMV, {row[3]}% actual late")
+                logger.info(
+                    f"  - {row[0]}: {row[1]:,} orders, {row[2]}% GMV, {row[3]}% actual late"
+                )
 
     def generate_methodology_report(self, df_scored: pd.DataFrame) -> Path:
         """Authors publication-quality methodology report in docs/risk_scoring_methodology.md."""
@@ -377,26 +407,28 @@ class RiskScoringEngine:
         q2 = q_stats[q_stats["strategic_quadrant"].str.startswith("Q2")].iloc[0]
         q3 = q_stats[q_stats["strategic_quadrant"].str.startswith("Q3")].iloc[0]
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 5. Key Operational Findings",
-            "",
-            f"1. **The Crown Jewels Anchor the Business**: **Q1** represents **{q1['gmv_share_pct']:.1f}% of all marketplace GMV** (${q1['total_gmv'] / 1e6:.2f}M BRL) while sustaining a remarkably low late delivery rate of **{q1['actual_late_pct']:.2f}%**.",
-            f"2. **Danger Zone Contains High Commercial Exposure**: **Q2** orders generate **${q2['total_gmv'] / 1e6:.2f}M BRL GMV** with an average basket of **${q2['avg_gmv']:.2f} BRL**, but suffer an actual failure rate of **{q2['actual_late_pct']:.2f}%** (over 4x higher than Q1). Prioritizing proactive courier intervention in Q2 prevents the majority of high-dollar customer escalations.",
-            f"3. **Value Drains Produce Negative Unit Economics**: **Q3** orders average negative expected contribution (${q3['avg_expected_cm']:.2f} BRL per order) due to thin margins eroded by high shipping fees and a **{q3['actual_late_pct']:.2f}% delivery failure rate**.",
-            "",
-            "---",
-            "",
-            "## 6. PostgreSQL Star Schema Integration",
-            "The Business Risk Layer is materialized directly in PostgreSQL `marketplace_analytics`:",
-            f"- **Target Table**: `mart.order_risk_profile` ({total_orders:,} records).",
-            "- **Executive Views**:",
-            "  - `mart.view_quadrant_executive_summary`",
-            "  - `mart.view_seller_risk_exposure`",
-            "  - `mart.view_category_risk_profile`",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 5. Key Operational Findings",
+                "",
+                f"1. **The Crown Jewels Anchor the Business**: **Q1** represents **{q1['gmv_share_pct']:.1f}% of all marketplace GMV** (${q1['total_gmv'] / 1e6:.2f}M BRL) while sustaining a remarkably low late delivery rate of **{q1['actual_late_pct']:.2f}%**.",
+                f"2. **Danger Zone Contains High Commercial Exposure**: **Q2** orders generate **${q2['total_gmv'] / 1e6:.2f}M BRL GMV** with an average basket of **${q2['avg_gmv']:.2f} BRL**, but suffer an actual failure rate of **{q2['actual_late_pct']:.2f}%** (over 4x higher than Q1). Prioritizing proactive courier intervention in Q2 prevents the majority of high-dollar customer escalations.",
+                f"3. **Value Drains Produce Negative Unit Economics**: **Q3** orders average negative expected contribution (${q3['avg_expected_cm']:.2f} BRL per order) due to thin margins eroded by high shipping fees and a **{q3['actual_late_pct']:.2f}% delivery failure rate**.",
+                "",
+                "---",
+                "",
+                "## 6. PostgreSQL Star Schema Integration",
+                "The Business Risk Layer is materialized directly in PostgreSQL `marketplace_analytics`:",
+                f"- **Target Table**: `mart.order_risk_profile` ({total_orders:,} records).",
+                "- **Executive Views**:",
+                "  - `mart.view_quadrant_executive_summary`",
+                "  - `mart.view_seller_risk_exposure`",
+                "  - `mart.view_category_risk_profile`",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))

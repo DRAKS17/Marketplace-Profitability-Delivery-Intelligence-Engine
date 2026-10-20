@@ -14,6 +14,11 @@ PROCESSED_DIR = Path("data/processed")
 DOCS_DIR = Path("docs")
 MODELS_DIR = Path("models")
 
+pytestmark = pytest.mark.skipif(
+    not (PROCESSED_DIR / "order_features.parquet").exists(),
+    reason="order_features.parquet not present in environment",
+)
+
 
 @pytest.fixture(scope="module")
 def predictor():
@@ -35,7 +40,9 @@ def test_feature_registry_anti_leakage():
     all_feats = registry.all_features
 
     for banned in registry.banned_leakage_cols:
-        assert banned not in all_feats, f"CRITICAL LEAKAGE: '{banned}' found in model feature set!"
+        assert banned not in all_feats, (
+            f"CRITICAL LEAKAGE: '{banned}' found in model feature set!"
+        )
 
     # Target must not be in features
     assert registry.target_col not in all_feats
@@ -48,7 +55,9 @@ def test_temporal_split_chronological_order(split_data):
     # Chronological barrier
     train_max_date = df_train["order_purchase_timestamp"].max()
     test_min_date = df_test["order_purchase_timestamp"].min()
-    assert train_max_date <= test_min_date, f"Temporal leak: Train max {train_max_date} > Test min {test_min_date}"
+    assert train_max_date <= test_min_date, (
+        f"Temporal leak: Train max {train_max_date} > Test min {test_min_date}"
+    )
 
     # Split sizes
     total_len = len(df_train) + len(df_test)
@@ -62,7 +71,9 @@ def test_model_pipeline_execution_and_metrics(predictor, split_data):
     """Tests pipeline fitting, probability calibration, and performance bounds."""
     _df_train, _df_test, X_train, y_train, X_test, y_test = split_data
 
-    pipeline = predictor.build_pipeline(max_depth=6, min_samples_leaf=100, class_weight="balanced")
+    pipeline = predictor.build_pipeline(
+        max_depth=6, min_samples_leaf=100, class_weight="balanced"
+    )
     pipeline.fit(X_train, y_train)
 
     probs = pipeline.predict_proba(X_test)[:, 1]
@@ -87,7 +98,9 @@ def test_model_persistence(predictor, split_data):
     """Verifies serialization and deserialization reproducibility with joblib."""
     _df_train, _df_test, X_train, y_train, X_test, _y_test = split_data
 
-    pipeline = predictor.build_pipeline(max_depth=4, min_samples_leaf=100, class_weight="balanced")
+    pipeline = predictor.build_pipeline(
+        max_depth=4, min_samples_leaf=100, class_weight="balanced"
+    )
     pipeline.fit(X_train, y_train)
 
     model_path = MODELS_DIR / "test_tree.joblib"
@@ -106,7 +119,9 @@ def test_feature_importances_structure(predictor, split_data):
     """Verifies that feature importances are valid and top drivers align with logistics reality."""
     _df_train, _df_test, X_train, y_train, _X_test, _y_test = split_data
 
-    pipeline = predictor.build_pipeline(max_depth=6, min_samples_leaf=100, class_weight="balanced")
+    pipeline = predictor.build_pipeline(
+        max_depth=6, min_samples_leaf=100, class_weight="balanced"
+    )
     pipeline.fit(X_train, y_train)
 
     importances = predictor.extract_feature_importances(pipeline)
@@ -114,14 +129,19 @@ def test_feature_importances_structure(predictor, split_data):
     assert pytest.approx(importances.sum(), rel=1e-4) == 1.0
 
     top_features = list(importances.head(5).index)
-    assert any("seller" in feat or "state" in feat or "duration" in feat for feat in top_features)
+    assert any(
+        "seller" in feat or "state" in feat or "duration" in feat
+        for feat in top_features
+    )
 
 
 def test_threshold_table_and_rules(predictor, split_data):
     """Tests threshold sensitivity grid and plain-text rule extraction."""
     _df_train, _df_test, X_train, y_train, X_test, y_test = split_data
 
-    pipeline = predictor.build_pipeline(max_depth=4, min_samples_leaf=100, class_weight="balanced")
+    pipeline = predictor.build_pipeline(
+        max_depth=4, min_samples_leaf=100, class_weight="balanced"
+    )
     pipeline.fit(X_train, y_train)
 
     table = predictor.compute_threshold_table(pipeline, X_test, y_test)

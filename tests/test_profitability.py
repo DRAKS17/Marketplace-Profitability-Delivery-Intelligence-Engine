@@ -12,6 +12,12 @@ from src.marketplace_intelligence.profitability import ProfitabilityModeler
 DOCS_DIR = Path("docs")
 PROCESSED_DIR = Path("data/processed")
 
+pytestmark = pytest.mark.skipif(
+    not (PROCESSED_DIR / "order_features.parquet").exists()
+    or not (PROCESSED_DIR / "order_reviews_enriched.parquet").exists(),
+    reason="Processed data files not present in environment",
+)
+
 
 @pytest.fixture(scope="module")
 def modeler():
@@ -30,7 +36,9 @@ def delivered_df(modeler):
     )
     df["is_delivery_issue"] = df["is_delivery_issue"].fillna(False)
     df["is_product_quality_issue"] = df["is_product_quality_issue"].fillna(False)
-    df["has_formal_complaint"] = df["is_delivery_issue"] | df["is_product_quality_issue"]
+    df["has_formal_complaint"] = (
+        df["is_delivery_issue"] | df["is_product_quality_issue"]
+    )
     return df[df["is_delivered"]].copy()
 
 
@@ -44,7 +52,10 @@ def test_profitability_report_generation(modeler):
     assert "## 1. Macro Marketplace P&L Scenarios" in content
     assert "## 2. 2D Sensitivity Analysis" in content
     assert "## 3. Product Category Profitability Ranking" in content
-    assert "## 4. The 'Late GMV = Lost Revenue' Myth vs True Commercial Exposure" in content
+    assert (
+        "## 4. The 'Late GMV = Lost Revenue' Myth vs True Commercial Exposure"
+        in content
+    )
     assert "health_beauty" in content
 
 

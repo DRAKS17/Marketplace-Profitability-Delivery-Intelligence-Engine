@@ -47,7 +47,11 @@ plt.rcParams["axes.labelsize"] = 12
 class EDAGenerator:
     """Generates analytical visualizations and executive narrative reports."""
 
-    def __init__(self, processed_dir: Path | str = "data/processed", docs_dir: Path | str = "docs"):
+    def __init__(
+        self,
+        processed_dir: Path | str = "data/processed",
+        docs_dir: Path | str = "docs",
+    ):
         self.processed_dir = Path(processed_dir)
         self.docs_dir = Path(docs_dir)
         self.figures_dir = self.docs_dir / "figures"
@@ -58,7 +62,12 @@ class EDAGenerator:
         logger.info("Loading order features and reviews for EDA...")
         orders = pd.read_parquet(self.processed_dir / "order_features.parquet")
         reviews = pd.read_parquet(self.processed_dir / "order_reviews_enriched.parquet")
-        merged = pd.merge(orders, reviews[["order_id", "review_score", "csat_category", "is_delivery_issue"]], on="order_id", how="left")
+        merged = pd.merge(
+            orders,
+            reviews[["order_id", "review_score", "csat_category", "is_delivery_issue"]],
+            on="order_id",
+            how="left",
+        )
 
         logger.info("1. Generating Delivery Delay vs CSAT chart...")
         self._plot_delay_vs_csat(merged)
@@ -91,11 +100,15 @@ class EDAGenerator:
 
     def _plot_delay_vs_csat(self, df: pd.DataFrame) -> None:
         """Plot 1: Delivery Delay vs Review Score."""
-        delivered = df[df["is_delivered"] & df["delivery_delay_days"].notna() & df["review_score"].notna()].copy()
+        delivered = df[
+            df["is_delivered"]
+            & df["delivery_delay_days"].notna()
+            & df["review_score"].notna()
+        ].copy()
         # Clip extreme outliers for visual clarity
         delivered["delay_clipped"] = delivered["delivery_delay_days"].clip(-25, 25)
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         palette = ["#d9534f", "#f0ad4e", "#f7ecb5", "#5bc0de", "#5cb85c"]
         sns.boxplot(
             data=delivered,
@@ -103,11 +116,20 @@ class EDAGenerator:
             y="delay_clipped",
             palette=palette,
             ax=ax,
-            boxprops=dict(alpha=0.85),
+            boxprops={"alpha": 0.85},
             fliersize=2,
         )
-        ax.axhline(0, color="black", linestyle="--", linewidth=1.2, label="Promised SLA (0 Days Delay)")
-        ax.set_title("Customer Review Score vs Delivery Delay (Days Relative to Estimate)", pad=15)
+        ax.axhline(
+            0,
+            color="black",
+            linestyle="--",
+            linewidth=1.2,
+            label="Promised SLA (0 Days Delay)",
+        )
+        ax.set_title(
+            "Customer Review Score vs Delivery Delay (Days Relative to Estimate)",
+            pad=15,
+        )
         ax.set_xlabel("Customer Review Score (1 to 5 Stars)")
         ax.set_ylabel("Delivery Delay (Days: Negative = Early, Positive = Late)")
         ax.legend(loc="upper right")
@@ -117,7 +139,9 @@ class EDAGenerator:
 
     def _plot_freight_ratio(self, df: pd.DataFrame) -> None:
         """Plot 2: Freight-to-Price Friction across Top Product Categories."""
-        delivered = df[df["is_delivered"] & df["primary_product_category"].notna()].copy()
+        delivered = df[
+            df["is_delivered"] & df["primary_product_category"].notna()
+        ].copy()
         cat_stats = (
             delivered.groupby("primary_product_category")
             .agg(
@@ -129,15 +153,26 @@ class EDAGenerator:
             .tail(15)
         )
 
-        fig, ax = plt.subplots(figsize=(11, 7))
+        _fig, ax = plt.subplots(figsize=(11, 7))
         colors = plt.cm.YlOrRd(np.linspace(0.4, 0.9, len(cat_stats)))
-        bars = ax.barh(cat_stats.index, cat_stats["median_freight_ratio"] * 100.0, color=colors)
-        ax.set_title("Median Freight Cost as % of Total Order Value (Top Friction Categories)", pad=15)
+        bars = ax.barh(
+            cat_stats.index, cat_stats["median_freight_ratio"] * 100.0, color=colors
+        )
+        ax.set_title(
+            "Median Freight Cost as % of Total Order Value (Top Friction Categories)",
+            pad=15,
+        )
         ax.set_xlabel("Median Freight Ratio (%)")
         ax.set_ylabel("Product Category")
         for bar in bars:
             width = bar.get_width()
-            ax.text(width + 0.3, bar.get_y() + bar.get_height() / 2, f"{width:.1f}%", va="center", fontsize=10)
+            ax.text(
+                width + 0.3,
+                bar.get_y() + bar.get_height() / 2,
+                f"{width:.1f}%",
+                va="center",
+                fontsize=10,
+            )
         plt.tight_layout()
         plt.savefig(self.figures_dir / "02_freight_ratio_distribution.png", dpi=300)
         plt.close()
@@ -155,7 +190,7 @@ class EDAGenerator:
             .query("order_count >= 10")
         )
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         scatter = ax.scatter(
             seller_stats["order_count"],
             seller_stats["late_rate"] * 100.0,
@@ -168,7 +203,13 @@ class EDAGenerator:
         cbar = plt.colorbar(scatter, ax=ax)
         cbar.set_label("Log10 Total GMV (BRL)")
         ax.set_xscale("log")
-        ax.axhline(8.11, color="red", linestyle="--", linewidth=1.2, label="Marketplace Average Late Rate (8.11%)")
+        ax.axhline(
+            8.11,
+            color="red",
+            linestyle="--",
+            linewidth=1.2,
+            label="Marketplace Average Late Rate (8.11%)",
+        )
         ax.set_title("Seller Order Volume vs Late Delivery Rate (Log Scale)", pad=15)
         ax.set_xlabel("Fulfilled Order Volume (Log Scale)")
         ax.set_ylabel("Late Delivery Rate (%)")
@@ -179,7 +220,9 @@ class EDAGenerator:
 
     def _plot_category_revenue_vs_margin(self, df: pd.DataFrame) -> None:
         """Plot 4: Category Gross GMV vs Net Estimated Contribution Margin."""
-        delivered = df[df["is_delivered"] & df["primary_product_category"].notna()].copy()
+        delivered = df[
+            df["is_delivered"] & df["primary_product_category"].notna()
+        ].copy()
         cat_fin = (
             delivered.groupby("primary_product_category")
             .agg(
@@ -194,16 +237,33 @@ class EDAGenerator:
         cat_fin["payment_cost"] = cat_fin["gmv"] * 0.018
         cat_fin["delay_remedy_cost"] = cat_fin["late_count"] * 15.0
         cat_fin["net_margin"] = (
-            cat_fin["estimated_commission"] - cat_fin["payment_cost"] - cat_fin["delay_remedy_cost"]
+            cat_fin["estimated_commission"]
+            - cat_fin["payment_cost"]
+            - cat_fin["delay_remedy_cost"]
         )
         cat_fin = cat_fin.sort_values("gmv", ascending=False).head(10)
 
-        fig, ax = plt.subplots(figsize=(12, 6))
+        _fig, ax = plt.subplots(figsize=(12, 6))
         x = np.arange(len(cat_fin))
         width = 0.35
-        ax.bar(x - width / 2, cat_fin["gmv"] / 1000.0, width, label="Gross GMV (k BRL)", color="#2b5c8f")
-        ax.bar(x + width / 2, cat_fin["net_margin"] / 1000.0, width, label="Net Contribution Margin (k BRL)", color="#4ca64c")
-        ax.set_title("Top 10 Product Categories: Gross GMV vs Estimated Platform Net Contribution", pad=15)
+        ax.bar(
+            x - width / 2,
+            cat_fin["gmv"] / 1000.0,
+            width,
+            label="Gross GMV (k BRL)",
+            color="#2b5c8f",
+        )
+        ax.bar(
+            x + width / 2,
+            cat_fin["net_margin"] / 1000.0,
+            width,
+            label="Net Contribution Margin (k BRL)",
+            color="#4ca64c",
+        )
+        ax.set_title(
+            "Top 10 Product Categories: Gross GMV vs Estimated Platform Net Contribution",
+            pad=15,
+        )
         ax.set_xticks(x)
         ax.set_xticklabels(cat_fin.index, rotation=35, ha="right")
         ax.set_ylabel("Thousand BRL (k R$)")
@@ -215,15 +275,38 @@ class EDAGenerator:
     def _plot_regional_performance(self, df: pd.DataFrame) -> None:
         """Plot 5: Geographic Macro-Region Delivery Days & Late Rate."""
         state_to_region = {
-            "SP": "Southeast", "RJ": "Southeast", "MG": "Southeast", "ES": "Southeast",
-            "PR": "South", "SC": "South", "RS": "South",
-            "BA": "Northeast", "PE": "Northeast", "CE": "Northeast", "MA": "Northeast", "PB": "Northeast",
-            "RN": "Northeast", "AL": "Northeast", "SE": "Northeast", "PI": "Northeast",
-            "DF": "Central-West", "GO": "Central-West", "MT": "Central-West", "MS": "Central-West",
-            "AM": "North", "PA": "North", "RO": "North", "AC": "North", "TO": "North", "AP": "North", "RR": "North",
+            "SP": "Southeast",
+            "RJ": "Southeast",
+            "MG": "Southeast",
+            "ES": "Southeast",
+            "PR": "South",
+            "SC": "South",
+            "RS": "South",
+            "BA": "Northeast",
+            "PE": "Northeast",
+            "CE": "Northeast",
+            "MA": "Northeast",
+            "PB": "Northeast",
+            "RN": "Northeast",
+            "AL": "Northeast",
+            "SE": "Northeast",
+            "PI": "Northeast",
+            "DF": "Central-West",
+            "GO": "Central-West",
+            "MT": "Central-West",
+            "MS": "Central-West",
+            "AM": "North",
+            "PA": "North",
+            "RO": "North",
+            "AC": "North",
+            "TO": "North",
+            "AP": "North",
+            "RR": "North",
         }
         delivered = df[df["is_delivered"] & df["customer_state"].notna()].copy()
-        delivered["macro_region"] = delivered["customer_state"].map(state_to_region).fillna("Unknown")
+        delivered["macro_region"] = (
+            delivered["customer_state"].map(state_to_region).fillna("Unknown")
+        )
         reg_stats = (
             delivered.groupby("macro_region")
             .agg(
@@ -233,12 +316,25 @@ class EDAGenerator:
             .sort_values("avg_delivery_days", ascending=True)
         )
 
-        fig, ax1 = plt.subplots(figsize=(10, 5.5))
+        _fig, ax1 = plt.subplots(figsize=(10, 5.5))
         ax2 = ax1.twinx()
         colors = ["#4a90e2", "#50e3c2", "#b8e986", "#f5a623", "#d0021b"]
 
-        ax1.bar(reg_stats.index, reg_stats["avg_delivery_days"], color=colors, alpha=0.85, width=0.45)
-        ax2.plot(reg_stats.index, reg_stats["late_rate"] * 100.0, color="#8b0000", marker="o", linewidth=2.5, label="Late Delivery Rate (%)")
+        ax1.bar(
+            reg_stats.index,
+            reg_stats["avg_delivery_days"],
+            color=colors,
+            alpha=0.85,
+            width=0.45,
+        )
+        ax2.plot(
+            reg_stats.index,
+            reg_stats["late_rate"] * 100.0,
+            color="#8b0000",
+            marker="o",
+            linewidth=2.5,
+            label="Late Delivery Rate (%)",
+        )
 
         ax1.set_title("Fulfillment Performance across Brazil's 5 Macro-Regions", pad=15)
         ax1.set_ylabel("Average Delivery Transit Duration (Days)")
@@ -251,10 +347,16 @@ class EDAGenerator:
 
     def _plot_root_cause_delay(self, df: pd.DataFrame) -> None:
         """Plot 6: Root Cause Attribution: Seller Dispatch vs Carrier Transit Duration."""
-        delivered = df[df["is_delivered"] & df["seller_dispatch_duration_hours"].notna() & df["carrier_transit_duration_days"].notna()].copy()
-        delivered["seller_dispatch_days"] = delivered["seller_dispatch_duration_hours"] / 24.0
+        delivered = df[
+            df["is_delivered"]
+            & df["seller_dispatch_duration_hours"].notna()
+            & df["carrier_transit_duration_days"].notna()
+        ].copy()
+        delivered["seller_dispatch_days"] = (
+            delivered["seller_dispatch_duration_hours"] / 24.0
+        )
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         sns.kdeplot(
             data=delivered,
             x="seller_dispatch_days",
@@ -266,8 +368,12 @@ class EDAGenerator:
             alpha=0.3,
             ax=ax,
         )
-        ax.set_title("Kernel Density of Seller Dispatch Processing Duration (Days)", pad=15)
-        ax.set_xlabel("Seller Dispatch Duration (Days from Purchase to Carrier Handoff)")
+        ax.set_title(
+            "Kernel Density of Seller Dispatch Processing Duration (Days)", pad=15
+        )
+        ax.set_xlabel(
+            "Seller Dispatch Duration (Days from Purchase to Carrier Handoff)"
+        )
         ax.set_ylabel("Density")
         ax.legend(labels=["Late Delivery", "On-Time Delivery"], loc="upper right")
         plt.tight_layout()
@@ -277,7 +383,12 @@ class EDAGenerator:
     def _plot_seller_lorenz_curve(self, df: pd.DataFrame) -> None:
         """Plot 7: Lorenz Curve of Marketplace Seller Revenue Concentration."""
         delivered = df[df["is_delivered"] & df["primary_seller_id"].notna()].copy()
-        seller_gmv = delivered.groupby("primary_seller_id")["order_total_item_value"].sum().sort_values().values
+        seller_gmv = (
+            delivered.groupby("primary_seller_id")["order_total_item_value"]
+            .sum()
+            .sort_values()
+            .values
+        )
         cum_gmv = np.cumsum(seller_gmv) / np.sum(seller_gmv)
         cum_sellers = np.linspace(0, 1, len(seller_gmv))
 
@@ -286,14 +397,32 @@ class EDAGenerator:
         b_area = np.trapezoid(cum_gmv, cum_sellers)
         gini = (0.5 - b_area) / 0.5
 
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.plot(cum_sellers * 100.0, cum_gmv * 100.0, color="#2b5c8f", linewidth=2.5, label=f"Marketplace Lorenz Curve (Gini = {gini:.2f})")
-        ax.plot([0, 100], [0, 100], color="gray", linestyle="--", label="Perfect Equality Line (y = x)")
+        _fig, ax = plt.subplots(figsize=(8, 8))
+        ax.plot(
+            cum_sellers * 100.0,
+            cum_gmv * 100.0,
+            color="#2b5c8f",
+            linewidth=2.5,
+            label=f"Marketplace Lorenz Curve (Gini = {gini:.2f})",
+        )
+        ax.plot(
+            [0, 100],
+            [0, 100],
+            color="gray",
+            linestyle="--",
+            label="Perfect Equality Line (y = x)",
+        )
         ax.scatter([80.2], [20.0], color="red", s=50, zorder=5)
-        ax.annotate("Pareto Point:\n80.2% of Sellers = 20% GMV", (80.2, 20.0), xytext=(55, 30),
-                    arrowprops=dict(arrowstyle="->", color="red", lw=1.2))
+        ax.annotate(
+            "Pareto Point:\n80.2% of Sellers = 20% GMV",
+            (80.2, 20.0),
+            xytext=(55, 30),
+            arrowprops={"arrowstyle": "->", "color": "red", "lw": 1.2},
+        )
 
-        ax.set_title("Merchant Revenue Concentration: Lorenz Curve & Gini Coefficient", pad=15)
+        ax.set_title(
+            "Merchant Revenue Concentration: Lorenz Curve & Gini Coefficient", pad=15
+        )
         ax.set_xlabel("Cumulative % of Sellers (Ranked from Smallest to Largest)")
         ax.set_ylabel("Cumulative % of Marketplace GMV")
         ax.legend(loc="upper left")
@@ -307,9 +436,13 @@ class EDAGenerator:
             order_count=("order_id", "count"),
             total_spend=("order_total_value", "sum"),
         )
-        cust_spend["buyer_segment"] = np.where(cust_spend["order_count"] > 1, "Repeat Buyer (3.1%)", "One-Time Buyer (96.9%)")
+        cust_spend["buyer_segment"] = np.where(
+            cust_spend["order_count"] > 1,
+            "Repeat Buyer (3.1%)",
+            "One-Time Buyer (96.9%)",
+        )
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         sns.boxplot(
             data=cust_spend,
             x="buyer_segment",
@@ -318,7 +451,10 @@ class EDAGenerator:
             ax=ax,
             showfliers=False,
         )
-        ax.set_title("Customer Total Spend Distribution: One-Time vs Repeat Buyers (Excl. Outliers)", pad=15)
+        ax.set_title(
+            "Customer Total Spend Distribution: One-Time vs Repeat Buyers (Excl. Outliers)",
+            pad=15,
+        )
         ax.set_xlabel("Customer Loyalty Segment")
         ax.set_ylabel("Total Monetary Spend (BRL)")
         plt.tight_layout()

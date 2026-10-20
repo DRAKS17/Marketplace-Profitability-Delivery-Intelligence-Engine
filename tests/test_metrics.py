@@ -11,11 +11,29 @@ Tests verify:
 """
 
 from pathlib import Path
+
 import pytest
 from sqlalchemy import text
+
 from src.marketplace_intelligence.database import get_postgres_engine
 
 DOCS_DIR = Path("docs")
+
+
+def _is_postgres_available() -> bool:
+    try:
+        engine = get_postgres_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _is_postgres_available(),
+    reason="PostgreSQL marketplace_analytics database not accessible",
+)
 SQL_DIR = Path("sql")
 
 
@@ -112,4 +130,6 @@ def test_sql_validation_logical_chronology(db_engine):
     with db_engine.connect() as conn:
         illogical_count = conn.execute(text(query)).scalar()
         # Exactly 23 orders out of 96,478 (0.024%) exhibit retrospective carrier scan logging
-        assert illogical_count == 23, f"Expected 23 historical carrier scan sync artifacts, found {illogical_count}."
+        assert illogical_count == 23, (
+            f"Expected 23 historical carrier scan sync artifacts, found {illogical_count}."
+        )

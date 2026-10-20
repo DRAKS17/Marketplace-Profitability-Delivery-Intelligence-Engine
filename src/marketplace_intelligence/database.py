@@ -53,7 +53,9 @@ def get_postgres_engine(database: str | None = None) -> Engine:
 class DatabaseManager:
     """Manages schema execution, table creation, and analytical loading."""
 
-    def __init__(self, sql_dir: Path | str = "sql", processed_dir: Path | str = "data/processed"):
+    def __init__(
+        self, sql_dir: Path | str = "sql", processed_dir: Path | str = "data/processed"
+    ):
         self.sql_dir = Path(sql_dir)
         self.processed_dir = Path(processed_dir)
         self.creds = get_db_credentials()
@@ -114,7 +116,9 @@ class DatabaseManager:
                 chunksize=10000,
                 method="multi",
             )
-            logger.info(f"Successfully loaded {len(df):,} rows into stg.{target_table}.")
+            logger.info(
+                f"Successfully loaded {len(df):,} rows into stg.{target_table}."
+            )
 
     def load_fact_orders(self) -> None:
         """Populates core.fact_orders from order_features to ensure zero fanout and include engineered metrics."""
@@ -125,10 +129,14 @@ class DatabaseManager:
 
         # Map customer_key and purchase_date_key
         with engine.connect() as conn:
-            cust_map = pd.read_sql("SELECT customer_id, customer_key FROM core.dim_customer", conn)
+            cust_map = pd.read_sql(
+                "SELECT customer_id, customer_key FROM core.dim_customer", conn
+            )
 
         df = pd.merge(df, cust_map, on="customer_id", how="left")
-        df["purchase_date_key"] = df["order_purchase_timestamp"].dt.strftime("%Y%m%d").astype(int)
+        df["purchase_date_key"] = (
+            df["order_purchase_timestamp"].dt.strftime("%Y%m%d").astype(int)
+        )
 
         fact_cols = {
             "order_id": "order_id",
@@ -160,11 +168,19 @@ class DatabaseManager:
         }
 
         fact_df = df[list(fact_cols.keys())].rename(columns=fact_cols).copy()
-        fact_df["is_interstate_delivery"] = fact_df["is_interstate_delivery"].astype(bool)
+        fact_df["is_interstate_delivery"] = fact_df["is_interstate_delivery"].astype(
+            bool
+        )
         fact_df["is_delivered"] = fact_df["is_delivered"].astype(bool)
-        fact_df["payment_split_count"] = fact_df["payment_split_count"].fillna(0).astype(int)
-        fact_df["max_payment_installments"] = fact_df["max_payment_installments"].fillna(0).astype(int)
-        fact_df["primary_payment_type"] = fact_df["primary_payment_type"].fillna("unknown")
+        fact_df["payment_split_count"] = (
+            fact_df["payment_split_count"].fillna(0).astype(int)
+        )
+        fact_df["max_payment_installments"] = (
+            fact_df["max_payment_installments"].fillna(0).astype(int)
+        )
+        fact_df["primary_payment_type"] = fact_df["primary_payment_type"].fillna(
+            "unknown"
+        )
         fact_df["is_late_delivery"] = fact_df["is_late_delivery"].apply(
             lambda v: bool(v) if pd.notna(v) else None
         )
@@ -224,17 +240,25 @@ class DatabaseManager:
 
             # Check financial reconciliation between fact_orders and fact_order_items
             order_gmv = conn.execute(
-                text("SELECT ROUND(SUM(order_total_item_value), 2) FROM core.fact_orders")
+                text(
+                    "SELECT ROUND(SUM(order_total_item_value), 2) FROM core.fact_orders"
+                )
             ).scalar()
             item_gmv = conn.execute(
                 text("SELECT ROUND(SUM(price), 2) FROM core.fact_order_items")
             ).scalar()
             diff = abs(float(order_gmv) - float(item_gmv))
             logger.info("-" * 80)
-            logger.info(f"Financial Reconciliation Check:")
-            logger.info(f"  - Sum GMV in core.fact_orders:     ${float(order_gmv):>14,f}")
-            logger.info(f"  - Sum Price in core.fact_order_items: ${float(item_gmv):>14,f}")
-            logger.info(f"  - Discrepancy / Fanout Error:       ${diff:>14,f} (Exact Zero Fanout Proof!)")
+            logger.info("Financial Reconciliation Check:")
+            logger.info(
+                f"  - Sum GMV in core.fact_orders:     ${float(order_gmv):>14,f}"
+            )
+            logger.info(
+                f"  - Sum Price in core.fact_order_items: ${float(item_gmv):>14,f}"
+            )
+            logger.info(
+                f"  - Discrepancy / Fanout Error:       ${diff:>14,f} (Exact Zero Fanout Proof!)"
+            )
             logger.info("=" * 80)
 
         return counts

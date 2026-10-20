@@ -17,6 +17,11 @@ DOCS_DIR = Path("docs")
 MODELS_DIR = Path("models")
 SQL_DIR = Path("sql")
 
+pytestmark = pytest.mark.skipif(
+    not (PROCESSED_DIR / "orders_risk_scored.parquet").exists(),
+    reason="orders_risk_scored.parquet not present in environment",
+)
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -31,7 +36,9 @@ def engine():
 @pytest.fixture(scope="module")
 def scored_df():
     parquet_path = PROCESSED_DIR / "orders_risk_scored.parquet"
-    assert parquet_path.exists(), "orders_risk_scored.parquet not found. Run risk_scoring.py first."
+    assert parquet_path.exists(), (
+        "orders_risk_scored.parquet not found. Run risk_scoring.py first."
+    )
     return pd.read_parquet(parquet_path)
 
 
@@ -117,7 +124,9 @@ def test_database_mart_integration():
     """Verifies PostgreSQL mart.order_risk_profile and executive summary view."""
     db_engine = get_postgres_engine()
     with db_engine.connect() as conn:
-        count = conn.execute(text("SELECT COUNT(*) FROM mart.order_risk_profile;")).scalar()
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM mart.order_risk_profile;")
+        ).scalar()
         assert count == 99441
 
         # Check executive summary view

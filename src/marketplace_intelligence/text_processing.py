@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -114,7 +113,11 @@ def normalize_portuguese_text(text: Any) -> str:
 class ReviewTextProcessor:
     """Processes customer review text and creates retrospective qualitative features."""
 
-    def __init__(self, processed_dir: Path | str = "data/processed", docs_dir: Path | str = "docs"):
+    def __init__(
+        self,
+        processed_dir: Path | str = "data/processed",
+        docs_dir: Path | str = "docs",
+    ):
         self.processed_dir = Path(processed_dir)
         self.docs_dir = Path(docs_dir)
         self.docs_dir.mkdir(parents=True, exist_ok=True)
@@ -130,19 +133,31 @@ class ReviewTextProcessor:
         # Quantitative metrics on original message
         df["review_char_length"] = df["review_comment_message"].fillna("").str.len()
         df["review_word_count"] = (
-            df["review_comment_message"].fillna("").apply(lambda s: len(s.split()) if s.strip() else 0)
+            df["review_comment_message"]
+            .fillna("")
+            .apply(lambda s: len(s.split()) if s.strip() else 0)
         )
 
         logger.info("Normalizing Portuguese text for operational keyword extraction...")
         # Combine title and message for comprehensive keyword scanning
-        combined_text = (df["review_comment_title"].fillna("") + " " + df["review_comment_message"].fillna("")).str.strip()
+        combined_text = (
+            df["review_comment_title"].fillna("")
+            + " "
+            + df["review_comment_message"].fillna("")
+        ).str.strip()
         df["normalized_text"] = combined_text.apply(normalize_portuguese_text)
 
         logger.info("Tagging domain operational issue indicators...")
         # Keyword detection on normalized text
-        df["is_delivery_issue"] = df["normalized_text"].apply(lambda t: bool(DELIVERY_ISSUE_REGEX.search(t)) if t else False)
-        df["is_product_quality_issue"] = df["normalized_text"].apply(lambda t: bool(PRODUCT_ISSUE_REGEX.search(t)) if t else False)
-        df["is_positive_experience"] = df["normalized_text"].apply(lambda t: bool(POSITIVE_REGEX.search(t)) if t else False)
+        df["is_delivery_issue"] = df["normalized_text"].apply(
+            lambda t: bool(DELIVERY_ISSUE_REGEX.search(t)) if t else False
+        )
+        df["is_product_quality_issue"] = df["normalized_text"].apply(
+            lambda t: bool(PRODUCT_ISSUE_REGEX.search(t)) if t else False
+        )
+        df["is_positive_experience"] = df["normalized_text"].apply(
+            lambda t: bool(POSITIVE_REGEX.search(t)) if t else False
+        )
 
         # CSAT categorization based on review_score (1-5)
         conditions = [
@@ -179,7 +194,9 @@ class ReviewTextProcessor:
         enriched_csv = self.processed_dir / "order_reviews_enriched.csv"
         df.to_parquet(enriched_parquet, index=False)
         df.to_csv(enriched_csv, index=False)
-        logger.info(f"Enriched reviews exported to {enriched_parquet.name} ({len(df):,} rows)")
+        logger.info(
+            f"Enriched reviews exported to {enriched_parquet.name} ({len(df):,} rows)"
+        )
 
         # Generate documentation
         self._generate_methodology_report(df)
@@ -221,52 +238,58 @@ class ReviewTextProcessor:
 
         for tag, count in feedback_counts.items():
             pct = (count / total_reviews) * 100
-            lines.append(f"| `{tag}` | {count:,} | {pct:.2f}% | Derived from star score and domain keywords |")
+            lines.append(
+                f"| `{tag}` | {count:,} | {pct:.2f}% | Derived from star score and domain keywords |"
+            )
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 2. Text Normalization Pipeline",
-            "",
-            "Customer commentary in Portuguese presents three distinct normalization challenges:",
-            "1. **Diacritics & Accents**: Words like `não`, `atrasou`, `óptimo`, and `parabéns` contain accents (`ã`, `ó`, `á`, `é`). Because users often type casually without accents (`nao`, `otimo`), we use Unicode NFKD normalization to strip combining marks while preserving the original raw text in separate columns.",
-            "2. **Whitespace and Newlines**: Reviews often contain multi-line linebreaks (`\\r\\n`), tabs, and erratic spaces that disrupt string parsers. These are normalized into clean single spaces.",
-            "3. **Case Folding**: All text is converted to lowercase for keyword matching.",
-            "",
-            "---",
-            "",
-            "## 3. Portuguese Domain-Specific Keyword Lexicon",
-            "",
-            "Rather than applying generic English sentiment dictionaries (e.g. VADER or TextBlob) which fail on Portuguese syntax, we implemented a targeted, domain-specific rule-based regex lexicon:",
-            "",
-            "- **Delivery Delay Indicators (`is_delivery_issue`)**:",
-            "  - `atraso`, `atrasou`, `atrasada`, `demorou`, `demora`, `nao recebi`, `nao chegou`, `fora do prazo`, `passou do prazo`, `esperando a entrega`, `extraviado`.",
-            "- **Product Defect Indicators (`is_product_quality_issue`)**:",
-            "  - `defeito`, `quebrado`, `danificado`, `estragado`, `errado`, `produto errado`, `veio faltando`, `faltou`, `nao funciona`, `pessima qualidade`, `ruim`, `falso`.",
-            "- **Positive Recommendation Indicators (`is_positive_experience`)**:",
-            "  - `recomendo`, `super recomendo`, `otimo`, `excelente`, `perfeito`, `parabens`, `muito bom`, `adorei`, `antes do prazo`, `chegou rapido`.",
-            "",
-            "---",
-            "",
-            "## 4. CRITICAL GOVERNANCE: Data Leakage Prevention in Machine Learning",
-            "",
-            "> [!CAUTION]",
-            "> **ANTI-LEAKAGE RULE**: Review features are strictly **POST-OUTCOME RETROSPECTIVE SIGNALS**.",
-            "",
-            "In Phase 12, our objective is to predict whether an order will be delivered late *at the moment of checkout or carrier dispatch*.",
-            "- The customer review survey is generated and answered **days or weeks after** the order has either arrived or failed to arrive.",
-            "- If any feature derived from reviews (`review_score`, `review_char_length`, `is_delivery_issue`, `has_comment_message`) is fed into the predictive model, it constitutes **target leakage** (using the future to predict the future).",
-            "- Therefore, review features are strictly reserved for:",
-            "  1. **Retrospective seller performance scoring**.",
-            "  2. **Exploratory Data Analysis (EDA) investigating the relationship between delays and 1-star reviews**.",
-            "  3. **Executive BI Dashboards (Power BI CSAT analysis)**.",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 2. Text Normalization Pipeline",
+                "",
+                "Customer commentary in Portuguese presents three distinct normalization challenges:",
+                "1. **Diacritics & Accents**: Words like `não`, `atrasou`, `óptimo`, and `parabéns` contain accents (`ã`, `ó`, `á`, `é`). Because users often type casually without accents (`nao`, `otimo`), we use Unicode NFKD normalization to strip combining marks while preserving the original raw text in separate columns.",
+                "2. **Whitespace and Newlines**: Reviews often contain multi-line linebreaks (`\\r\\n`), tabs, and erratic spaces that disrupt string parsers. These are normalized into clean single spaces.",
+                "3. **Case Folding**: All text is converted to lowercase for keyword matching.",
+                "",
+                "---",
+                "",
+                "## 3. Portuguese Domain-Specific Keyword Lexicon",
+                "",
+                "Rather than applying generic English sentiment dictionaries (e.g. VADER or TextBlob) which fail on Portuguese syntax, we implemented a targeted, domain-specific rule-based regex lexicon:",
+                "",
+                "- **Delivery Delay Indicators (`is_delivery_issue`)**:",
+                "  - `atraso`, `atrasou`, `atrasada`, `demorou`, `demora`, `nao recebi`, `nao chegou`, `fora do prazo`, `passou do prazo`, `esperando a entrega`, `extraviado`.",
+                "- **Product Defect Indicators (`is_product_quality_issue`)**:",
+                "  - `defeito`, `quebrado`, `danificado`, `estragado`, `errado`, `produto errado`, `veio faltando`, `faltou`, `nao funciona`, `pessima qualidade`, `ruim`, `falso`.",
+                "- **Positive Recommendation Indicators (`is_positive_experience`)**:",
+                "  - `recomendo`, `super recomendo`, `otimo`, `excelente`, `perfeito`, `parabens`, `muito bom`, `adorei`, `antes do prazo`, `chegou rapido`.",
+                "",
+                "---",
+                "",
+                "## 4. CRITICAL GOVERNANCE: Data Leakage Prevention in Machine Learning",
+                "",
+                "> [!CAUTION]",
+                "> **ANTI-LEAKAGE RULE**: Review features are strictly **POST-OUTCOME RETROSPECTIVE SIGNALS**.",
+                "",
+                "In Phase 12, our objective is to predict whether an order will be delivered late *at the moment of checkout or carrier dispatch*.",
+                "- The customer review survey is generated and answered **days or weeks after** the order has either arrived or failed to arrive.",
+                "- If any feature derived from reviews (`review_score`, `review_char_length`, `is_delivery_issue`, `has_comment_message`) is fed into the predictive model, it constitutes **target leakage** (using the future to predict the future).",
+                "- Therefore, review features are strictly reserved for:",
+                "  1. **Retrospective seller performance scoring**.",
+                "  2. **Exploratory Data Analysis (EDA) investigating the relationship between delays and 1-star reviews**.",
+                "  3. **Executive BI Dashboards (Power BI CSAT analysis)**.",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
-        logger.info(f"Text processing methodology report written to {report_path.resolve()}")
+        logger.info(
+            f"Text processing methodology report written to {report_path.resolve()}"
+        )
         return report_path
 
 

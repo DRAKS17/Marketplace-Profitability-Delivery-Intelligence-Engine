@@ -144,7 +144,9 @@ class LateDeliveryPredictor:
 
     def load_and_split_data(
         self, train_ratio: float = 0.80
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+    ) -> tuple[
+        pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.DataFrame, pd.Series
+    ]:
         """Loads order features, filters delivered orders, enforces anti-leakage, and splits temporally."""
         logger.info("Loading order feature store...")
         df = pd.read_parquet(self.processed_dir / "order_features.parquet")
@@ -163,7 +165,9 @@ class LateDeliveryPredictor:
         # Anti-leakage verification
         for banned in self.features.banned_leakage_cols:
             if banned in self.features.all_features:
-                raise ValueError(f"CRITICAL LEAKAGE: Banned column '{banned}' detected in feature set!")
+                raise ValueError(
+                    f"CRITICAL LEAKAGE: Banned column '{banned}' detected in feature set!"
+                )
 
         split_idx = int(len(df) * train_ratio)
         df_train = df.iloc[:split_idx].copy()
@@ -196,7 +200,11 @@ class LateDeliveryPredictor:
 
         preprocessor = ColumnTransformer(
             transformers=[
-                ("num", num_transformer, self.features.numeric_cols + self.features.bool_cols),
+                (
+                    "num",
+                    num_transformer,
+                    self.features.numeric_cols + self.features.bool_cols,
+                ),
                 ("cat", cat_transformer, self.features.categorical_cols),
             ]
         )
@@ -228,7 +236,9 @@ class LateDeliveryPredictor:
         dummy_preds = dummy.predict(X_test)
 
         # 2. Unweighted Decision Tree
-        pipeline_unweighted = self.build_pipeline(max_depth=6, min_samples_leaf=100, class_weight=None)
+        pipeline_unweighted = self.build_pipeline(
+            max_depth=6, min_samples_leaf=100, class_weight=None
+        )
         pipeline_unweighted.fit(X_train, y_train)
         unw_probs = pipeline_unweighted.predict_proba(X_test)[:, 1]
         unw_preds = pipeline_unweighted.predict(X_test)
@@ -242,7 +252,9 @@ class LateDeliveryPredictor:
             "Dummy Baseline": {
                 "roc_auc": float(roc_auc_score(y_test, dummy_probs)),
                 "pr_auc": float(average_precision_score(y_test, dummy_probs)),
-                "precision": float(precision_score(y_test, dummy_preds, zero_division=0)),
+                "precision": float(
+                    precision_score(y_test, dummy_preds, zero_division=0)
+                ),
                 "recall": float(recall_score(y_test, dummy_preds)),
                 "f1": float(f1_score(y_test, dummy_preds, zero_division=0)),
             },
@@ -305,11 +317,15 @@ class LateDeliveryPredictor:
         classifier = pipeline.named_steps["classifier"]
 
         cat_names = list(
-            preprocessor.named_transformers_["cat"].get_feature_names_out(self.features.categorical_cols)
+            preprocessor.named_transformers_["cat"].get_feature_names_out(
+                self.features.categorical_cols
+            )
         )
         all_names = self.features.numeric_cols + self.features.bool_cols + cat_names
 
-        importances = pd.Series(classifier.feature_importances_, index=all_names).sort_values(ascending=False)
+        importances = pd.Series(
+            classifier.feature_importances_, index=all_names
+        ).sort_values(ascending=False)
         return importances
 
     def extract_tree_rules(self, pipeline: Pipeline, max_depth: int = 3) -> str:
@@ -318,7 +334,9 @@ class LateDeliveryPredictor:
         classifier = pipeline.named_steps["classifier"]
 
         cat_names = list(
-            preprocessor.named_transformers_["cat"].get_feature_names_out(self.features.categorical_cols)
+            preprocessor.named_transformers_["cat"].get_feature_names_out(
+                self.features.categorical_cols
+            )
         )
         all_names = self.features.numeric_cols + self.features.bool_cols + cat_names
 
@@ -345,9 +363,24 @@ class LateDeliveryPredictor:
         # ROC Curve
         fpr, tpr, _ = roc_curve(y_test, y_prob)
         roc_auc = roc_auc_score(y_test, y_prob)
-        axes[0].plot(fpr, tpr, color="#2b5c8f", lw=2.5, label=f"Balanced Tree (AUC = {roc_auc:.3f})")
-        axes[0].plot([0, 1], [0, 1], color="#a94442", lw=1.5, linestyle="--", label="Random Chance (0.500)")
-        axes[0].set_title("Receiver Operating Characteristic (ROC) Curve", fontweight="bold")
+        axes[0].plot(
+            fpr,
+            tpr,
+            color="#2b5c8f",
+            lw=2.5,
+            label=f"Balanced Tree (AUC = {roc_auc:.3f})",
+        )
+        axes[0].plot(
+            [0, 1],
+            [0, 1],
+            color="#a94442",
+            lw=1.5,
+            linestyle="--",
+            label="Random Chance (0.500)",
+        )
+        axes[0].set_title(
+            "Receiver Operating Characteristic (ROC) Curve", fontweight="bold"
+        )
         axes[0].set_xlabel("False Positive Rate (1 - Specificity)")
         axes[0].set_ylabel("True Positive Rate (Recall)")
         axes[0].legend(loc="lower right", frameon=True)
@@ -357,8 +390,20 @@ class LateDeliveryPredictor:
         precision_vals, recall_vals, _ = precision_recall_curve(y_test, y_prob)
         pr_auc = average_precision_score(y_test, y_prob)
         baseline_rate = y_test.mean()
-        axes[1].plot(recall_vals, precision_vals, color="#3c763d", lw=2.5, label=f"Balanced Tree (PR-AUC = {pr_auc:.3f})")
-        axes[1].axhline(y=baseline_rate, color="#a94442", lw=1.5, linestyle="--", label=f"Prevalence Baseline ({baseline_rate:.3f})")
+        axes[1].plot(
+            recall_vals,
+            precision_vals,
+            color="#3c763d",
+            lw=2.5,
+            label=f"Balanced Tree (PR-AUC = {pr_auc:.3f})",
+        )
+        axes[1].axhline(
+            y=baseline_rate,
+            color="#a94442",
+            lw=1.5,
+            linestyle="--",
+            label=f"Prevalence Baseline ({baseline_rate:.3f})",
+        )
         axes[1].set_title("Precision-Recall (PR) Curve", fontweight="bold")
         axes[1].set_xlabel("Recall (Coverage of Late Deliveries)")
         axes[1].set_ylabel("Precision (Correctness of Flags)")
@@ -394,7 +439,11 @@ class LateDeliveryPredictor:
             yticklabels=["Actual On-Time", "Actual Late"],
             annot_kws={"size": 13, "weight": "bold"},
         )
-        ax.set_title("Test Confusion Matrix (Balanced Decision Tree @ 0.5 Threshold)", fontweight="bold", pad=12)
+        ax.set_title(
+            "Test Confusion Matrix (Balanced Decision Tree @ 0.5 Threshold)",
+            fontweight="bold",
+            pad=12,
+        )
         plt.tight_layout()
         p2 = self.figures_dir / "fig10_confusion_matrix.png"
         fig.savefig(p2, dpi=300)
@@ -418,13 +467,22 @@ class LateDeliveryPredictor:
 
         fig, ax = plt.subplots(figsize=(10, 6))
         bars = ax.barh(top_imp.index, top_imp.values * 100.0, color=colors, height=0.65)
-        ax.set_title("Decision Tree Feature Importances (Gini Split Contribution)", fontweight="bold")
+        ax.set_title(
+            "Decision Tree Feature Importances (Gini Split Contribution)",
+            fontweight="bold",
+        )
         ax.set_xlabel("Relative Importance (%)")
         ax.set_xlim(0, max(top_imp.values * 100.0) * 1.15)
 
         for bar in bars:
             width = bar.get_width()
-            ax.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f"{width:.1f}%", va="center", weight="bold")
+            ax.text(
+                width + 0.5,
+                bar.get_y() + bar.get_height() / 2,
+                f"{width:.1f}%",
+                va="center",
+                weight="bold",
+            )
 
         # Custom legend for domains
         from matplotlib.patches import Patch
@@ -448,7 +506,9 @@ class LateDeliveryPredictor:
         preprocessor = pipeline.named_steps["preprocessor"]
         classifier = pipeline.named_steps["classifier"]
         cat_names = list(
-            preprocessor.named_transformers_["cat"].get_feature_names_out(self.features.categorical_cols)
+            preprocessor.named_transformers_["cat"].get_feature_names_out(
+                self.features.categorical_cols
+            )
         )
         all_names = self.features.numeric_cols + self.features.bool_cols + cat_names
 
@@ -464,7 +524,11 @@ class LateDeliveryPredictor:
             ax=ax,
             proportion=True,
         )
-        ax.set_title("Late Delivery Decision Tree Architecture (Top 3 Decision Layers)", fontweight="bold", pad=12)
+        ax.set_title(
+            "Late Delivery Decision Tree Architecture (Top 3 Decision Layers)",
+            fontweight="bold",
+            pad=12,
+        )
         plt.tight_layout()
         p4 = self.figures_dir / "fig12_decision_tree_structure.png"
         fig.savefig(p4, dpi=300)
@@ -532,28 +596,30 @@ class LateDeliveryPredictor:
                 f"| **{model_name}** | {m['roc_auc']:.4f} | {m['pr_auc']:.4f} | {m['recall']:.2%} | {m['precision']:.2%} | {m['f1']:.4f} |"
             )
 
-        card_content.extend([
-            "",
-            "> [!NOTE]",
-            f"> **PR-AUC Lift**: The Balanced Decision Tree achieves a **PR-AUC of {metrics['Balanced Tree (Production)']['pr_auc']:.4f}**, representing a **5.4x lift** over the test prevalence baseline ({metrics['Dummy Baseline']['pr_auc']:.4f}).",
-            "",
-            "---",
-            "",
-            "## 5. Decision Threshold Sensitivity & Risk Cost Optimization",
-            "",
-            "In e-commerce delivery logistics, costs are highly asymmetric: missing a late delivery ($FN cost = $20 BRL) is far more damaging than sending a precautionary alert ($FP cost = $1 BRL).",
-            "",
-            threshold_table.to_markdown(index=False),
-            "",
-            "---",
-            "",
-            "## 6. Feature Importance & Operational Attribution",
-            "",
-            "The top 10 features driving decision splits (Gini Impurity Reduction):",
-            "",
-            "| Feature | Relative Importance (%) | Domain Interpretation |",
-            "|---|---|---|",
-        ])
+        card_content.extend(
+            [
+                "",
+                "> [!NOTE]",
+                f"> **PR-AUC Lift**: The Balanced Decision Tree achieves a **PR-AUC of {metrics['Balanced Tree (Production)']['pr_auc']:.4f}**, representing a **5.4x lift** over the test prevalence baseline ({metrics['Dummy Baseline']['pr_auc']:.4f}).",
+                "",
+                "---",
+                "",
+                "## 5. Decision Threshold Sensitivity & Risk Cost Optimization",
+                "",
+                "In e-commerce delivery logistics, costs are highly asymmetric: missing a late delivery ($FN cost = $20 BRL) is far more damaging than sending a precautionary alert ($FP cost = $1 BRL).",
+                "",
+                threshold_table.to_markdown(index=False),
+                "",
+                "---",
+                "",
+                "## 6. Feature Importance & Operational Attribution",
+                "",
+                "The top 10 features driving decision splits (Gini Impurity Reduction):",
+                "",
+                "| Feature | Relative Importance (%) | Domain Interpretation |",
+                "|---|---|---|",
+            ]
+        )
 
         domain_map = {
             "is_seller_late_dispatch": "Seller operational breach of shipping deadline",
@@ -572,23 +638,25 @@ class LateDeliveryPredictor:
             desc = domain_map.get(feat, "Order basket / commercial attribute")
             card_content.append(f"| `{feat}` | {val * 100:.2f}% | {desc} |")
 
-        card_content.extend([
-            "",
-            "---",
-            "",
-            "## 7. Extracted Tree Business Logic (Top 3 Decision Layers)",
-            "",
-            "```text",
-            tree_rules.strip(),
-            "```",
-            "",
-            "---",
-            "",
-            "## 8. Limitations & Recommended Mitigations",
-            "1. **Courier Scan Drift Artifacts**: As identified in Phase 9, 23 orders have carrier scan dates recorded after doorstep arrival due to manual courier batch synchronization. Handled through input bounds clipping.",
-            "2. **State-Level Granularity**: Distance calculation is based on postal district centroids. Sub-district routing density is not captured.",
-            "3. **Cold-Start Merchants**: New sellers have `seller_prior_late_rate = 0.0`. Imputed with system prior to prevent cold-start bias.",
-        ])
+        card_content.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 7. Extracted Tree Business Logic (Top 3 Decision Layers)",
+                "",
+                "```text",
+                tree_rules.strip(),
+                "```",
+                "",
+                "---",
+                "",
+                "## 8. Limitations & Recommended Mitigations",
+                "1. **Courier Scan Drift Artifacts**: As identified in Phase 9, 23 orders have carrier scan dates recorded after doorstep arrival due to manual courier batch synchronization. Handled through input bounds clipping.",
+                "2. **State-Level Granularity**: Distance calculation is based on postal district centroids. Sub-district routing density is not captured.",
+                "3. **Cold-Start Merchants**: New sellers have `seller_prior_late_rate = 0.0`. Imputed with system prior to prevent cold-start bias.",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(card_content))
@@ -599,10 +667,14 @@ class LateDeliveryPredictor:
     def run_pipeline(self) -> dict[str, any]:
         """Executes full model training, evaluation, visualization, persistence, and reporting."""
         # 1. Load and split
-        _df_train, _df_test, X_train, y_train, X_test, y_test = self.load_and_split_data(train_ratio=0.80)
+        _df_train, _df_test, X_train, y_train, X_test, y_test = (
+            self.load_and_split_data(train_ratio=0.80)
+        )
 
         # 2. Build and fit production model
-        pipeline = self.build_pipeline(max_depth=6, min_samples_leaf=100, class_weight="balanced")
+        pipeline = self.build_pipeline(
+            max_depth=6, min_samples_leaf=100, class_weight="balanced"
+        )
 
         # 3. Evaluate comparison models
         metrics = self.evaluate_models(X_train, y_train, X_test, y_test, pipeline)

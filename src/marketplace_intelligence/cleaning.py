@@ -16,9 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import numpy as np
 import pandas as pd
 
 logging.basicConfig(
@@ -41,7 +39,12 @@ class CleaningAuditRecord:
 class DataCleaner:
     """Orchestrates reproducible data cleaning across the Olist ecosystem."""
 
-    def __init__(self, raw_dir: Path | str = "data/raw", processed_dir: Path | str = "data/processed", docs_dir: Path | str = "docs"):
+    def __init__(
+        self,
+        raw_dir: Path | str = "data/raw",
+        processed_dir: Path | str = "data/processed",
+        docs_dir: Path | str = "docs",
+    ):
         self.raw_dir = Path(raw_dir)
         self.processed_dir = Path(processed_dir)
         self.docs_dir = Path(docs_dir)
@@ -87,7 +90,9 @@ class DataCleaner:
     def clean_geolocation(self) -> pd.DataFrame:
         """Cleans geolocation data: drops dupes, filters GPS outliers, and aggregates to 1 row per zip prefix."""
         logger.info("Cleaning olist_geolocation_dataset.csv...")
-        raw = pd.read_csv(self.raw_dir / "olist_geolocation_dataset.csv", low_memory=False)
+        raw = pd.read_csv(
+            self.raw_dir / "olist_geolocation_dataset.csv", low_memory=False
+        )
         raw_count = len(raw)
         mods: list[str] = []
 
@@ -105,11 +110,17 @@ class DataCleaner:
         )
         invalid_gps_count = int((~valid_bbox).sum())
         filtered = deduped[valid_bbox].copy()
-        mods.append(f"Removed {invalid_gps_count:,} coordinate records falling outside Brazilian territory.")
+        mods.append(
+            f"Removed {invalid_gps_count:,} coordinate records falling outside Brazilian territory."
+        )
 
         # 3. Standardize city string formatting
-        filtered["geolocation_city"] = filtered["geolocation_city"].str.strip().str.lower()
-        filtered["geolocation_state"] = filtered["geolocation_state"].str.strip().str.upper()
+        filtered["geolocation_city"] = (
+            filtered["geolocation_city"].str.strip().str.lower()
+        )
+        filtered["geolocation_state"] = (
+            filtered["geolocation_state"].str.strip().str.upper()
+        )
 
         # 4. Spatial aggregation to 1 row per zip code prefix
         # Take median lat/lng to be robust against localized GPS jitter, and mode for city/state
@@ -118,12 +129,20 @@ class DataCleaner:
             .agg(
                 geolocation_lat=("geolocation_lat", "median"),
                 geolocation_lng=("geolocation_lng", "median"),
-                geolocation_city=("geolocation_city", lambda s: s.mode().iloc[0] if not s.empty else "unknown"),
-                geolocation_state=("geolocation_state", lambda s: s.mode().iloc[0] if not s.empty else "unknown"),
+                geolocation_city=(
+                    "geolocation_city",
+                    lambda s: s.mode().iloc[0] if not s.empty else "unknown",
+                ),
+                geolocation_state=(
+                    "geolocation_state",
+                    lambda s: s.mode().iloc[0] if not s.empty else "unknown",
+                ),
             )
             .reset_index()
         )
-        mods.append(f"Aggregated coordinates to postal prefix centroid (Reduced from {len(filtered):,} to {len(agg_geo):,} unique prefixes).")
+        mods.append(
+            f"Aggregated coordinates to postal prefix centroid (Reduced from {len(filtered):,} to {len(agg_geo):,} unique prefixes)."
+        )
 
         self.audit_records.append(
             CleaningAuditRecord(
@@ -146,8 +165,12 @@ class DataCleaner:
         df["customer_city"] = df["customer_city"].str.strip().str.lower()
         df["customer_state"] = df["customer_state"].str.strip().str.upper()
         df["customer_zip_code_prefix"] = df["customer_zip_code_prefix"].astype(int)
-        mods.append("Trimmed whitespace and normalized customer city to lowercase and state to uppercase.")
-        mods.append("Verified customer_id uniqueness (99,441 unique tokens) and 0 nulls.")
+        mods.append(
+            "Trimmed whitespace and normalized customer city to lowercase and state to uppercase."
+        )
+        mods.append(
+            "Verified customer_id uniqueness (99,441 unique tokens) and 0 nulls."
+        )
 
         self.audit_records.append(
             CleaningAuditRecord(
@@ -187,8 +210,12 @@ class DataCleaner:
     def clean_products(self) -> pd.DataFrame:
         """Cleans products: maps English translations, handles unmapped categories, and imputes missing dimensions."""
         logger.info("Cleaning olist_products_dataset.csv and translations...")
-        products = pd.read_csv(self.raw_dir / "olist_products_dataset.csv", low_memory=False)
-        trans = pd.read_csv(self.raw_dir / "product_category_name_translation.csv", low_memory=False)
+        products = pd.read_csv(
+            self.raw_dir / "olist_products_dataset.csv", low_memory=False
+        )
+        trans = pd.read_csv(
+            self.raw_dir / "product_category_name_translation.csv", low_memory=False
+        )
         raw_count = len(products)
         mods: list[str] = []
 
@@ -203,29 +230,58 @@ class DataCleaner:
         for pt, en in manual_translations.items():
             mask = merged["product_category_name"] == pt
             merged.loc[mask, "product_category_name_english"] = en
-        mods.append("Mapped manual English translations for 'portateis_cozinha_e_preparadores_de_alimentos' and 'pc_gamer'.")
+        mods.append(
+            "Mapped manual English translations for 'portateis_cozinha_e_preparadores_de_alimentos' and 'pc_gamer'."
+        )
 
         # Explicit 'unknown' imputation for missing product categories (610 products)
         null_cat_count = int(merged["product_category_name"].isna().sum())
-        merged["product_category_name"] = merged["product_category_name"].fillna("outros")
-        merged["product_category_name_english"] = merged["product_category_name_english"].fillna("others")
-        mods.append(f"Imputed {null_cat_count} missing product categories with explicit 'outros' / 'others'.")
+        merged["product_category_name"] = merged["product_category_name"].fillna(
+            "outros"
+        )
+        merged["product_category_name_english"] = merged[
+            "product_category_name_english"
+        ].fillna("others")
+        mods.append(
+            f"Imputed {null_cat_count} missing product categories with explicit 'outros' / 'others'."
+        )
 
         # Impute missing physical dimensions (2 rows) with category median
-        dim_cols = ["product_weight_g", "product_length_cm", "product_height_cm", "product_width_cm"]
+        dim_cols = [
+            "product_weight_g",
+            "product_length_cm",
+            "product_height_cm",
+            "product_width_cm",
+        ]
         for col in dim_cols:
             null_count = int(merged[col].isna().sum())
             if null_count > 0:
                 overall_median = merged[col].median()
-                merged[col] = merged.groupby("product_category_name_english")[col].transform(
-                    lambda g: g.fillna(g.median() if not pd.isna(g.median()) else overall_median)
+                merged[col] = merged.groupby("product_category_name_english")[
+                    col
+                ].transform(
+                    lambda g, om=overall_median: g.fillna(
+                        g.median() if not pd.isna(g.median()) else om
+                    )
                 )
-                mods.append(f"Imputed {null_count} missing values in '{col}' using category group median.")
+                mods.append(
+                    f"Imputed {null_count} missing values in '{col}' using category group median."
+                )
 
         # Ensure correct integer / float types
-        merged["product_photos_qty"] = merged["product_photos_qty"].fillna(1).astype(int)
-        merged["product_name_lenght"] = merged["product_name_lenght"].fillna(merged["product_name_lenght"].median()).astype(int)
-        merged["product_description_lenght"] = merged["product_description_lenght"].fillna(merged["product_description_lenght"].median()).astype(int)
+        merged["product_photos_qty"] = (
+            merged["product_photos_qty"].fillna(1).astype(int)
+        )
+        merged["product_name_lenght"] = (
+            merged["product_name_lenght"]
+            .fillna(merged["product_name_lenght"].median())
+            .astype(int)
+        )
+        merged["product_description_lenght"] = (
+            merged["product_description_lenght"]
+            .fillna(merged["product_description_lenght"].median())
+            .astype(int)
+        )
 
         self.audit_records.append(
             CleaningAuditRecord(
@@ -255,15 +311,24 @@ class DataCleaner:
         for col in date_cols:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-        mods.append("Parsed 5 lifecycle timestamp columns into datetime64[ns]. Preserved 2,965 structural delivery nulls.")
+        mods.append(
+            "Parsed 5 lifecycle timestamp columns into datetime64[ns]. Preserved 2,965 structural delivery nulls."
+        )
 
         # Chronological anomaly detection
         # Delivery cannot be before purchase
-        delivery_before_purchase = (df["order_delivered_customer_date"] < df["order_purchase_timestamp"]).sum()
+        delivery_before_purchase = (
+            df["order_delivered_customer_date"] < df["order_purchase_timestamp"]
+        ).sum()
         df["is_chronologically_valid"] = True
         if delivery_before_purchase > 0:
-            df.loc[df["order_delivered_customer_date"] < df["order_purchase_timestamp"], "is_chronologically_valid"] = False
-            mods.append(f"Flagged {delivery_before_purchase} orders where delivery timestamp preceded purchase timestamp.")
+            df.loc[
+                df["order_delivered_customer_date"] < df["order_purchase_timestamp"],
+                "is_chronologically_valid",
+            ] = False
+            mods.append(
+                f"Flagged {delivery_before_purchase} orders where delivery timestamp preceded purchase timestamp."
+            )
 
         # Clean order status strings
         df["order_status"] = df["order_status"].str.strip().str.lower()
@@ -283,11 +348,15 @@ class DataCleaner:
     def clean_order_items(self) -> pd.DataFrame:
         """Cleans order items: parses dates, validates prices, and flags free shipping."""
         logger.info("Cleaning olist_order_items_dataset.csv...")
-        df = pd.read_csv(self.raw_dir / "olist_order_items_dataset.csv", low_memory=False)
+        df = pd.read_csv(
+            self.raw_dir / "olist_order_items_dataset.csv", low_memory=False
+        )
         raw_count = len(df)
         mods: list[str] = []
 
-        df["shipping_limit_date"] = pd.to_datetime(df["shipping_limit_date"], errors="coerce")
+        df["shipping_limit_date"] = pd.to_datetime(
+            df["shipping_limit_date"], errors="coerce"
+        )
         df["order_item_id"] = df["order_item_id"].astype(int)
         df["price"] = df["price"].astype(float)
         df["freight_value"] = df["freight_value"].astype(float)
@@ -295,7 +364,9 @@ class DataCleaner:
         # Flag zero-freight promotional shipping
         free_shipping_count = int((df["freight_value"] == 0.0).sum())
         df["is_free_shipping"] = df["freight_value"] == 0.0
-        mods.append(f"Identified and flagged {free_shipping_count} promotional free-shipping records (freight = 0.0).")
+        mods.append(
+            f"Identified and flagged {free_shipping_count} promotional free-shipping records (freight = 0.0)."
+        )
 
         self.audit_records.append(
             CleaningAuditRecord(
@@ -311,7 +382,9 @@ class DataCleaner:
     def clean_order_payments(self) -> pd.DataFrame:
         """Cleans payments: standardizes payment types, handles zero installments, and flags voided transactions."""
         logger.info("Cleaning olist_order_payments_dataset.csv...")
-        df = pd.read_csv(self.raw_dir / "olist_order_payments_dataset.csv", low_memory=False)
+        df = pd.read_csv(
+            self.raw_dir / "olist_order_payments_dataset.csv", low_memory=False
+        )
         raw_count = len(df)
         mods: list[str] = []
 
@@ -322,10 +395,14 @@ class DataCleaner:
         zero_inst_count = int(zero_inst_mask.sum())
         df.loc[zero_inst_mask, "payment_installments"] = 1
         if zero_inst_count > 0:
-            mods.append(f"Imputed {zero_inst_count} records where installments was 0 to minimum 1 installment.")
+            mods.append(
+                f"Imputed {zero_inst_count} records where installments was 0 to minimum 1 installment."
+            )
 
         # Flag voided transactions (payment_value = 0 or payment_type = 'not_defined')
-        voided_mask = (df["payment_value"] == 0.0) | (df["payment_type"] == "not_defined")
+        voided_mask = (df["payment_value"] == 0.0) | (
+            df["payment_type"] == "not_defined"
+        )
         voided_count = int(voided_mask.sum())
         df["is_voided_payment"] = voided_mask
         mods.append(f"Flagged {voided_count} voided / zero-value payment transactions.")
@@ -344,25 +421,39 @@ class DataCleaner:
     def clean_order_reviews(self) -> pd.DataFrame:
         """Cleans reviews: deduplicates multi-survey responses, parses dates, and creates comment indicators."""
         logger.info("Cleaning olist_order_reviews_dataset.csv...")
-        df = pd.read_csv(self.raw_dir / "olist_order_reviews_dataset.csv", low_memory=False)
+        df = pd.read_csv(
+            self.raw_dir / "olist_order_reviews_dataset.csv", low_memory=False
+        )
         raw_count = len(df)
         mods: list[str] = []
 
         # Parse timestamps
-        df["review_creation_date"] = pd.to_datetime(df["review_creation_date"], errors="coerce")
-        df["review_answer_timestamp"] = pd.to_datetime(df["review_answer_timestamp"], errors="coerce")
+        df["review_creation_date"] = pd.to_datetime(
+            df["review_creation_date"], errors="coerce"
+        )
+        df["review_answer_timestamp"] = pd.to_datetime(
+            df["review_answer_timestamp"], errors="coerce"
+        )
 
         # Deduplicate multiple survey records for the exact same order: keep the latest answered review
-        deduped = df.sort_values("review_answer_timestamp").drop_duplicates(subset=["order_id", "review_id"], keep="last").copy()
+        deduped = (
+            df.sort_values("review_answer_timestamp")
+            .drop_duplicates(subset=["order_id", "review_id"], keep="last")
+            .copy()
+        )
         dupes_dropped = raw_count - len(deduped)
         if dupes_dropped > 0:
-            mods.append(f"Deduplicated {dupes_dropped} multiple review survey attempts, keeping latest answer timestamp.")
+            mods.append(
+                f"Deduplicated {dupes_dropped} multiple review survey attempts, keeping latest answer timestamp."
+            )
 
         # Explicit indicator for review comments (do not fabricate customer words)
         deduped["has_comment_title"] = deduped["review_comment_title"].notna()
         deduped["has_comment_message"] = deduped["review_comment_message"].notna()
         deduped["review_score"] = deduped["review_score"].astype(int)
-        mods.append("Created boolean presence indicators 'has_comment_title' and 'has_comment_message' without fabricating text.")
+        mods.append(
+            "Created boolean presence indicators 'has_comment_title' and 'has_comment_message' without fabricating text."
+        )
 
         self.audit_records.append(
             CleaningAuditRecord(
@@ -407,15 +498,19 @@ class DataCleaner:
 
         for r in self.audit_records:
             retention = (r.cleaned_rows / r.raw_rows) * 100 if r.raw_rows > 0 else 100.0
-            lines.append(f"| `{r.dataset}` | {r.raw_rows:,} | {r.cleaned_rows:,} | {r.rows_removed:,} | {retention:.2f}% |")
+            lines.append(
+                f"| `{r.dataset}` | {r.raw_rows:,} | {r.cleaned_rows:,} | {r.rows_removed:,} | {retention:.2f}% |"
+            )
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 2. Table-by-Table Cleaning Log & Business Justifications",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 2. Table-by-Table Cleaning Log & Business Justifications",
+                "",
+            ]
+        )
 
         for r in self.audit_records:
             lines.append(f"### Entity: `{r.dataset}`")
@@ -426,18 +521,20 @@ class DataCleaner:
                 lines.append(f"  - {mod}")
             lines.append("")
 
-        lines.extend([
-            "---",
-            "",
-            "## 3. Core Cleaning Decisions & Methodological Rigor",
-            "",
-            "1. **Preservation of Structural Nulls**: Order delivery dates were explicitly **not** filled with zeros or medians. Filling them would convert 2,965 undelivered/canceled orders into fulfilled orders, corrupting fulfillment SLA metrics.",
-            "2. **Spatial Centroid Aggregation**: Geolocation coordinates were reduced from 1,000,163 noisy GPS readings down to 19,015 unique postal centroids using median coordinates and modal municipality labels, while filtering out coordinates outside Brazilian boundaries.",
-            "3. **Missing Category Handling**: Imputed 610 missing product categories with explicit `'outros'` / `'others'` rather than guessing categories, preserving audit integrity.",
-            "4. **Manual Category Translations**: Resolved the two missing Portuguese categories (`portateis_cozinha_e_preparadores_de_alimentos` $\\rightarrow$ `small_appliances_food_preparation`, `pc_gamer` $\\rightarrow$ `pc_gamer`).",
-            "5. **Free Shipping vs Corrupt Freight**: Verified that 383 records with `freight_value = 0.0` represent legitimate marketplace free shipping promotions and preserved them with an explicit `is_free_shipping` boolean flag.",
-            "6. **Review Text Integrity**: Preserved missing review comments as explicit nulls while adding `has_comment_title` and `has_comment_message` boolean indicators, avoiding textual hallucination.",
-        ])
+        lines.extend(
+            [
+                "---",
+                "",
+                "## 3. Core Cleaning Decisions & Methodological Rigor",
+                "",
+                "1. **Preservation of Structural Nulls**: Order delivery dates were explicitly **not** filled with zeros or medians. Filling them would convert 2,965 undelivered/canceled orders into fulfilled orders, corrupting fulfillment SLA metrics.",
+                "2. **Spatial Centroid Aggregation**: Geolocation coordinates were reduced from 1,000,163 noisy GPS readings down to 19,015 unique postal centroids using median coordinates and modal municipality labels, while filtering out coordinates outside Brazilian boundaries.",
+                "3. **Missing Category Handling**: Imputed 610 missing product categories with explicit `'outros'` / `'others'` rather than guessing categories, preserving audit integrity.",
+                "4. **Manual Category Translations**: Resolved the two missing Portuguese categories (`portateis_cozinha_e_preparadores_de_alimentos` $\\rightarrow$ `small_appliances_food_preparation`, `pc_gamer` $\\rightarrow$ `pc_gamer`).",
+                "5. **Free Shipping vs Corrupt Freight**: Verified that 383 records with `freight_value = 0.0` represent legitimate marketplace free shipping promotions and preserved them with an explicit `is_free_shipping` boolean flag.",
+                "6. **Review Text Integrity**: Preserved missing review comments as explicit nulls while adding `has_comment_title` and `has_comment_message` boolean indicators, avoiding textual hallucination.",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
@@ -447,5 +544,7 @@ class DataCleaner:
 
 
 if __name__ == "__main__":
-    cleaner = DataCleaner(raw_dir="data/raw", processed_dir="data/processed", docs_dir="docs")
+    cleaner = DataCleaner(
+        raw_dir="data/raw", processed_dir="data/processed", docs_dir="docs"
+    )
     cleaner.run_all()

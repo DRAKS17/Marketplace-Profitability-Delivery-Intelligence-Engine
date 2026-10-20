@@ -47,7 +47,11 @@ class ScenarioConfig:
 class ProfitabilityModeler:
     """Simulates platform contribution margins under diverse commercial scenarios."""
 
-    def __init__(self, processed_dir: Path | str = "data/processed", docs_dir: Path | str = "docs"):
+    def __init__(
+        self,
+        processed_dir: Path | str = "data/processed",
+        docs_dir: Path | str = "docs",
+    ):
         self.processed_dir = Path(processed_dir)
         self.docs_dir = Path(docs_dir)
         self.docs_dir.mkdir(parents=True, exist_ok=True)
@@ -84,7 +88,7 @@ class ProfitabilityModeler:
         logger.info("Loading order features and reviews for profitability modeling...")
         orders = pd.read_parquet(self.processed_dir / "order_features.parquet")
         reviews = pd.read_parquet(self.processed_dir / "order_reviews_enriched.parquet")
-        
+
         # Merge complaint signals
         df = pd.merge(
             orders,
@@ -94,7 +98,9 @@ class ProfitabilityModeler:
         )
         df["is_delivery_issue"] = df["is_delivery_issue"].fillna(False)
         df["is_product_quality_issue"] = df["is_product_quality_issue"].fillna(False)
-        df["has_formal_complaint"] = df["is_delivery_issue"] | df["is_product_quality_issue"]
+        df["has_formal_complaint"] = (
+            df["is_delivery_issue"] | df["is_product_quality_issue"]
+        )
 
         delivered = df[df["is_delivered"]].copy()
         logger.info(f"Loaded {len(delivered):,} delivered orders for P&L modeling.")
@@ -109,14 +115,18 @@ class ProfitabilityModeler:
 
         # 3. Category Profitability Breakdown
         logger.info("3. Computing Category Contribution Margins...")
-        category_pnl = self._compute_category_pnl(delivered, self.scenarios["Base Case (Realistic)"])
+        category_pnl = self._compute_category_pnl(
+            delivered, self.scenarios["Base Case (Realistic)"]
+        )
 
         # 4. True Late Delivery Commercial Exposure
         logger.info("4. Evaluating True Commercial Exposure of Late Deliveries...")
         exposure_metrics = self._evaluate_commercial_exposure(delivered)
 
         # Generate markdown report
-        report_path = self._generate_profitability_report(scenario_results, sensitivity_df, category_pnl, exposure_metrics)
+        report_path = self._generate_profitability_report(
+            scenario_results, sensitivity_df, category_pnl, exposure_metrics
+        )
         logger.info(f"Profitability analysis report written to {report_path.resolve()}")
         return report_path
 
@@ -170,7 +180,11 @@ class ProfitabilityModeler:
         is_cc = df["primary_payment_type"] == "credit_card"
 
         # Baseline payment fee (2.0% CC, 1.0% Boleto)
-        base_payment_cost = float(np.where(is_cc, df["order_total_value"] * 0.02, df["order_total_value"] * 0.01).sum())
+        base_payment_cost = float(
+            np.where(
+                is_cc, df["order_total_value"] * 0.02, df["order_total_value"] * 0.01
+            ).sum()
+        )
         base_support_cost = complaint_orders * 5.00
 
         comm_rates = [0.10, 0.12, 0.14, 0.16]
@@ -184,12 +198,16 @@ class ProfitabilityModeler:
                 total_exp = base_payment_cost + base_support_cost + (late_orders * vc)
                 net_cm = rev - total_exp
                 net_margin_pct = (net_cm / total_gmv) * 100.0
-                row[f"${vc:.0f} Voucher"] = f"${net_cm / 1000:,.1f}k ({net_margin_pct:.2f}%)"
+                row[f"${vc:.0f} Voucher"] = (
+                    f"${net_cm / 1000:,.1f}k ({net_margin_pct:.2f}%)"
+                )
             matrix.append(row)
 
         return pd.DataFrame(matrix)
 
-    def _compute_category_pnl(self, df: pd.DataFrame, sc: ScenarioConfig) -> pd.DataFrame:
+    def _compute_category_pnl(
+        self, df: pd.DataFrame, sc: ScenarioConfig
+    ) -> pd.DataFrame:
         """Computes net contribution margin ranked by product category."""
         is_cc = df["primary_payment_type"] == "credit_card"
         df_pnl = df.copy()
@@ -198,8 +216,12 @@ class ProfitabilityModeler:
             df_pnl["order_total_value"] * sc.cc_fee_pct,
             df_pnl["order_total_value"] * sc.boleto_fee_pct,
         )
-        df_pnl["voucher_fee"] = np.where(df_pnl["is_late_delivery"] == 1.0, sc.voucher_cost_brl, 0.0)
-        df_pnl["support_fee"] = np.where(df_pnl["has_formal_complaint"], sc.complaint_cost_brl, 0.0)
+        df_pnl["voucher_fee"] = np.where(
+            df_pnl["is_late_delivery"] == 1.0, sc.voucher_cost_brl, 0.0
+        )
+        df_pnl["support_fee"] = np.where(
+            df_pnl["has_formal_complaint"], sc.complaint_cost_brl, 0.0
+        )
 
         cat_summary = (
             df_pnl.groupby("primary_product_category")
@@ -217,7 +239,9 @@ class ProfitabilityModeler:
 
         cat_summary["commission_rev"] = cat_summary["gmv"] * sc.commission_rate
         cat_summary["total_expenses"] = (
-            cat_summary["payment_cost"] + cat_summary["voucher_cost"] + cat_summary["support_cost"]
+            cat_summary["payment_cost"]
+            + cat_summary["voucher_cost"]
+            + cat_summary["support_cost"]
         )
         cat_summary["net_contribution_margin"] = (
             cat_summary["commission_rev"] - cat_summary["total_expenses"]
@@ -226,7 +250,9 @@ class ProfitabilityModeler:
             cat_summary["net_contribution_margin"] / cat_summary["gmv"]
         ) * 100.0
 
-        return cat_summary.sort_values("net_contribution_margin", ascending=False).head(15)
+        return cat_summary.sort_values("net_contribution_margin", ascending=False).head(
+            15
+        )
 
     def _evaluate_commercial_exposure(self, df: pd.DataFrame) -> dict[str, float]:
         """Calculates true commercial exposure metrics to dispel the 'late GMV = lost revenue' myth."""
@@ -242,7 +268,9 @@ class ProfitabilityModeler:
         # Direct monetary remedy costs
         direct_voucher_remedy_cost = late_order_count * 15.00
         direct_support_cost = int(late_orders_df["has_formal_complaint"].sum()) * 5.00
-        total_direct_operational_exposure = direct_voucher_remedy_cost + direct_support_cost
+        total_direct_operational_exposure = (
+            direct_voucher_remedy_cost + direct_support_cost
+        )
 
         return {
             "total_delivered_gmv": total_delivered_gmv,
@@ -253,7 +281,8 @@ class ProfitabilityModeler:
             "direct_voucher_remedy_cost": direct_voucher_remedy_cost,
             "direct_support_cost": direct_support_cost,
             "total_direct_operational_exposure": total_direct_operational_exposure,
-            "net_platform_cash_retained_on_late": platform_commission_earned_on_late - total_direct_operational_exposure,
+            "net_platform_cash_retained_on_late": platform_commission_earned_on_late
+            - total_direct_operational_exposure,
         }
 
     def _generate_profitability_report(
@@ -295,7 +324,11 @@ class ProfitabilityModeler:
             ("Total Variable Expenses", "total_variable_expenses", "-${:,.2f}"),
             ("**Net Contribution Margin**", "net_contribution_margin", "**${:,.2f}**"),
             ("Gross Commission Rate", "gross_take_rate_pct", "{:.1f}%"),
-            ("**Net Margin % (Effective Take-Rate)**", "net_take_rate_pct", "**{:.2f}%**"),
+            (
+                "**Net Margin % (Effective Take-Rate)**",
+                "net_take_rate_pct",
+                "**{:.2f}%**",
+            ),
         ]
 
         for label, key, fmt in metrics_order:
@@ -304,53 +337,57 @@ class ProfitabilityModeler:
             o_val = fmt.format(scenarios["Optimistic (Growth Scale)"][key])
             lines.append(f"| {label} | {c_val} | {b_val} | {o_val} |")
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 2. 2D Sensitivity Analysis: Commission Rate vs Voucher Remedy Cost",
-            "",
-            "Shows **Net Platform Contribution Margin (Thousand BRL)** and **Effective Take-Rate (%)** across strategic parameter combinations:",
-            "",
-            sensitivity.to_markdown(index=False),
-            "",
-            f"- **Base Case**: At a {base_sc['gross_take_rate_pct']:.0f}% commission and $15 BRL remedy voucher, the platform generates **${base_sc['net_contribution_margin'] / 1000:,.1f}k BRL net contribution** (**{base_sc['net_take_rate_pct']:.2f}% net take-rate**).",
-            f"- **Stress Case**: At a {stress_sc['gross_take_rate_pct']:.0f}% commission and $25 BRL remedy voucher, net contribution drops to **${stress_sc['net_contribution_margin'] / 1000:,.1f}k BRL** (**{stress_sc['net_take_rate_pct']:.2f}% net take-rate**).",
-            f"- **Scale Case**: At a {opt_sc['gross_take_rate_pct']:.0f}% commission and $10 BRL remedy voucher, net contribution reaches **${opt_sc['net_contribution_margin'] / 1000:,.1f}k BRL** (**{opt_sc['net_take_rate_pct']:.2f}% net take-rate**).",
-            "",
-            "---",
-            "",
-            "## 3. Product Category Profitability Ranking (Base Case)",
-            "",
-            "| Category | Delivered Orders | Category GMV | Commission (12%) | Variable Costs | Net Contribution Margin | Net Margin % |",
-            "|---|---|---|---|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 2. 2D Sensitivity Analysis: Commission Rate vs Voucher Remedy Cost",
+                "",
+                "Shows **Net Platform Contribution Margin (Thousand BRL)** and **Effective Take-Rate (%)** across strategic parameter combinations:",
+                "",
+                sensitivity.to_markdown(index=False),
+                "",
+                f"- **Base Case**: At a {base_sc['gross_take_rate_pct']:.0f}% commission and $15 BRL remedy voucher, the platform generates **${base_sc['net_contribution_margin'] / 1000:,.1f}k BRL net contribution** (**{base_sc['net_take_rate_pct']:.2f}% net take-rate**).",
+                f"- **Stress Case**: At a {stress_sc['gross_take_rate_pct']:.0f}% commission and $25 BRL remedy voucher, net contribution drops to **${stress_sc['net_contribution_margin'] / 1000:,.1f}k BRL** (**{stress_sc['net_take_rate_pct']:.2f}% net take-rate**).",
+                f"- **Scale Case**: At a {opt_sc['gross_take_rate_pct']:.0f}% commission and $10 BRL remedy voucher, net contribution reaches **${opt_sc['net_contribution_margin'] / 1000:,.1f}k BRL** (**{opt_sc['net_take_rate_pct']:.2f}% net take-rate**).",
+                "",
+                "---",
+                "",
+                "## 3. Product Category Profitability Ranking (Base Case)",
+                "",
+                "| Category | Delivered Orders | Category GMV | Commission (12%) | Variable Costs | Net Contribution Margin | Net Margin % |",
+                "|---|---|---|---|---|---|---|",
+            ]
+        )
 
         for cat, r in category_pnl.iterrows():
             lines.append(
                 f"| `{cat}` | {int(r['delivered_orders']):,} | ${r['gmv']:,.2f} | ${r['commission_rev']:,.2f} | ${r['total_expenses']:,.2f} | **${r['net_contribution_margin']:,.2f}** | **{r['net_take_rate_pct']:.2f}%** |"
             )
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 4. The 'Late GMV = Lost Revenue' Myth vs True Commercial Exposure",
-            "",
-            "> [!IMPORTANT]",
-            "> **EXECUTIVE FACT CHECK**: When an order arrives late, the customer did **not** automatically cancel or refund it. The product was delivered and retained by the buyer.",
-            "",
-            f"- **Total GMV Associated with Late Deliveries**: **${exposure['late_gmv_associated']:,.2f}** ({exposure['late_gmv_share_pct']:.2f}% of all delivered GMV).",
-            f"- **Gross Platform Commission Earned on These Late Orders**: **${exposure['platform_commission_earned_on_late']:,.2f}**.",
-            f"- **Direct Late Voucher Remedy Cost ($15 / late order)**: **-${exposure['direct_voucher_remedy_cost']:,.2f}**.",
-            f"- **Direct Customer Service Complaint Overhead ($5 / ticket)**: **-${exposure['direct_support_cost']:,.2f}**.",
-            f"- **Total Direct Operational Exposure**: **${exposure['total_direct_operational_exposure']:,.2f}**.",
-            f"- **Net Cash Retained by Platform on Late Deliveries**: **+${exposure['net_platform_cash_retained_on_late']:,.2f}**.",
-            "",
-            "### Conclusion on Late Delivery Economics:",
-            f"Late deliveries do **not** cost the platform ${exposure['late_gmv_associated'] / 1e6:.2f} Million BRL in lost gross merchandise value. The true direct cost to the marketplace is **${exposure['total_direct_operational_exposure']:,.2f} BRL** in customer service overhead and goodwill compensation credits.",
-            "The primary commercial damage of delivery failure is **not immediate transaction loss**, but **long-term brand erosion** (CSAT collapsing from 4.29 to 2.57 stars) and the resulting suppression of repeat customer lifetime value.",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## 4. The 'Late GMV = Lost Revenue' Myth vs True Commercial Exposure",
+                "",
+                "> [!IMPORTANT]",
+                "> **EXECUTIVE FACT CHECK**: When an order arrives late, the customer did **not** automatically cancel or refund it. The product was delivered and retained by the buyer.",
+                "",
+                f"- **Total GMV Associated with Late Deliveries**: **${exposure['late_gmv_associated']:,.2f}** ({exposure['late_gmv_share_pct']:.2f}% of all delivered GMV).",
+                f"- **Gross Platform Commission Earned on These Late Orders**: **${exposure['platform_commission_earned_on_late']:,.2f}**.",
+                f"- **Direct Late Voucher Remedy Cost ($15 / late order)**: **-${exposure['direct_voucher_remedy_cost']:,.2f}**.",
+                f"- **Direct Customer Service Complaint Overhead ($5 / ticket)**: **-${exposure['direct_support_cost']:,.2f}**.",
+                f"- **Total Direct Operational Exposure**: **${exposure['total_direct_operational_exposure']:,.2f}**.",
+                f"- **Net Cash Retained by Platform on Late Deliveries**: **+${exposure['net_platform_cash_retained_on_late']:,.2f}**.",
+                "",
+                "### Conclusion on Late Delivery Economics:",
+                f"Late deliveries do **not** cost the platform ${exposure['late_gmv_associated'] / 1e6:.2f} Million BRL in lost gross merchandise value. The true direct cost to the marketplace is **${exposure['total_direct_operational_exposure']:,.2f} BRL** in customer service overhead and goodwill compensation credits.",
+                "The primary commercial damage of delivery failure is **not immediate transaction loss**, but **long-term brand erosion** (CSAT collapsing from 4.29 to 2.57 stars) and the resulting suppression of repeat customer lifetime value.",
+            ]
+        )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))

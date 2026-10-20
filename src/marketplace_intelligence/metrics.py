@@ -65,7 +65,9 @@ class SQLExecutiveAnalyzer:
 
         with self.engine.connect() as conn:
             # 1. Monthly GMV & MoM Growth
-            logger.info("Running Analysis 1: Monthly GMV, MoM Growth & Rolling Averages...")
+            logger.info(
+                "Running Analysis 1: Monthly GMV, MoM Growth & Rolling Averages..."
+            )
             q1 = """
             WITH monthly_metrics AS (
                 SELECT 
@@ -99,18 +101,20 @@ class SQLExecutiveAnalyzer:
             ORDER BY year_month;
             """
             df1 = pd.read_sql(text(q1), conn)
-            lines.extend([
-                "## 1. Monthly Marketplace GMV, MoM Growth & Rolling Averages",
-                "",
-                "**Business Question**: How did marketplace Gross Merchandise Value (GMV) and order volume evolve month-over-month, and what is the underlying trend when smoothed with a 3-month rolling average?",
-                "",
-                df1.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: Marketplace GMV scaled aggressively from ~$19k in early 2017 to peak at **~$1.0 Million/month** by late 2017 (Black Friday) and maintained a steady **$850k–$1.0M monthly run-rate** throughout 2018.",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 1. Monthly Marketplace GMV, MoM Growth & Rolling Averages",
+                    "",
+                    "**Business Question**: How did marketplace Gross Merchandise Value (GMV) and order volume evolve month-over-month, and what is the underlying trend when smoothed with a 3-month rolling average?",
+                    "",
+                    df1.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: Marketplace GMV scaled aggressively from ~$19k in early 2017 to peak at **~$1.0 Million/month** by late 2017 (Black Friday) and maintained a steady **$850k–$1.0M monthly run-rate** throughout 2018.",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 2. Pareto 80/20 Seller Concentration
             logger.info("Running Analysis 2: Seller Revenue Concentration (Pareto)...")
@@ -149,18 +153,20 @@ class SQLExecutiveAnalyzer:
             WHERE revenue_rank <= 15;
             """
             df2 = pd.read_sql(text(q2), conn)
-            lines.extend([
-                "## 2. Seller Revenue Concentration & Pareto Analysis",
-                "",
-                "**Business Question**: How concentrated is marketplace revenue among top merchants? What fraction of sellers accounts for 80% of our GMV?",
-                "",
-                df2.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: Extreme Pareto concentration: The top **19.8% of sellers account for 80.0% of total marketplace GMV**. Retaining and monitoring these top merchants is vital to marketplace commercial viability.",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 2. Seller Revenue Concentration & Pareto Analysis",
+                    "",
+                    "**Business Question**: How concentrated is marketplace revenue among top merchants? What fraction of sellers accounts for 80% of our GMV?",
+                    "",
+                    df2.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: Extreme Pareto concentration: The top **19.8% of sellers account for 80.0% of total marketplace GMV**. Retaining and monitoring these top merchants is vital to marketplace commercial viability.",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 3. Top 3 Categories per State
             logger.info("Running Analysis 3: Top Categories per State...")
@@ -199,18 +205,20 @@ class SQLExecutiveAnalyzer:
             ORDER BY customer_state, category_rank_in_state;
             """
             df3 = pd.read_sql(text(q3), conn)
-            lines.extend([
-                "## 3. Top Product Categories in Major States (Partitioned Window Rankings)",
-                "",
-                "**Business Question**: What are the top 3 product categories by GMV within each of Brazil's largest commercial states?",
-                "",
-                df3.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: `health_beauty`, `bed_bath_table`, and `watches_gifts` dominate the primary consumption hubs (São Paulo, Rio de Janeiro, and Minas Gerais).",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 3. Top Product Categories in Major States (Partitioned Window Rankings)",
+                    "",
+                    "**Business Question**: What are the top 3 product categories by GMV within each of Brazil's largest commercial states?",
+                    "",
+                    df3.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: `health_beauty`, `bed_bath_table`, and `watches_gifts` dominate the primary consumption hubs (São Paulo, Rio de Janeiro, and Minas Gerais).",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 4. Customer Acquisition Cohorts
             logger.info("Running Analysis 4: Customer Acquisition Cohorts...")
@@ -251,18 +259,20 @@ class SQLExecutiveAnalyzer:
             ORDER BY cohort_month, cohort_index;
             """
             df4 = pd.read_sql(text(q4), conn)
-            lines.extend([
-                "## 4. Customer Acquisition Cohort Analysis",
-                "",
-                "**Business Question**: How does customer purchasing evolve in the months following acquisition?",
-                "",
-                df4.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: Olist is heavily acquisition-driven. Less than **0.5% of customers in any cohort repeat purchase in Month 1**, indicating low organic customer stickiness and high reliance on new acquisition ad spend.",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 4. Customer Acquisition Cohort Analysis",
+                    "",
+                    "**Business Question**: How does customer purchasing evolve in the months following acquisition?",
+                    "",
+                    df4.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: Olist is heavily acquisition-driven. Less than **0.5% of customers in any cohort repeat purchase in Month 1**, indicating low organic customer stickiness and high reliance on new acquisition ad spend.",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 5. Late Delivery vs CSAT Impact
             logger.info("Running Analysis 5: Delivery SLA vs CSAT Sentiment...")
@@ -298,18 +308,20 @@ class SQLExecutiveAnalyzer:
             ORDER BY average_review_score DESC;
             """
             df5 = pd.read_sql(text(q5), conn)
-            lines.extend([
-                "## 5. Fulfillment SLA Compliance vs Customer Sentiment (CSAT)",
-                "",
-                "**Business Question**: How severely does a late delivery impact customer review ratings and trigger delivery complaints?",
-                "",
-                df5.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: A late delivery catastrophically crashes customer satisfaction: On-time deliveries average **4.26 / 5.0 stars** (only 5.8% 1-star ratings). Late deliveries plummet to **1.71 / 5.0 stars** (with **68.2% 1-star ratings** and **52.3% of customers explicitly citing delivery failure** in their reviews).",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 5. Fulfillment SLA Compliance vs Customer Sentiment (CSAT)",
+                    "",
+                    "**Business Question**: How severely does a late delivery impact customer review ratings and trigger delivery complaints?",
+                    "",
+                    df5.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: A late delivery catastrophically crashes customer satisfaction: On-time deliveries average **4.26 / 5.0 stars** (only 5.8% 1-star ratings). Late deliveries plummet to **1.71 / 5.0 stars** (with **68.2% 1-star ratings** and **52.3% of customers explicitly citing delivery failure** in their reviews).",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 6. Distance Quartiles vs Late Delivery
             logger.info("Running Analysis 6: Distance Quartile Delay Patterns...")
@@ -338,21 +350,25 @@ class SQLExecutiveAnalyzer:
             ORDER BY distance_quartile;
             """
             df6 = pd.read_sql(text(q6), conn)
-            lines.extend([
-                "## 6. Shipping Distance Quartiles vs Delivery Failure Rates",
-                "",
-                "**Business Question**: How does physical logistics distance (in km) influence delivery transit duration and SLA failure rates?",
-                "",
-                df6.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: Late delivery rates jump from **4.64%** in Quartile 1 (< 190 km) to **12.51%** in Quartile 4 (> 750 km). Transit duration nearly doubles from 8.8 days to 16.9 days.",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 6. Shipping Distance Quartiles vs Delivery Failure Rates",
+                    "",
+                    "**Business Question**: How does physical logistics distance (in km) influence delivery transit duration and SLA failure rates?",
+                    "",
+                    df6.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: Late delivery rates jump from **4.64%** in Quartile 1 (< 190 km) to **12.51%** in Quartile 4 (> 750 km). Transit duration nearly doubles from 8.8 days to 16.9 days.",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 7. Estimated Platform Net Contribution Margin
-            logger.info("Running Analysis 7: Estimated Contribution Margin Scenarios...")
+            logger.info(
+                "Running Analysis 7: Estimated Contribution Margin Scenarios..."
+            )
             q7 = """
             WITH category_financials AS (
                 SELECT 
@@ -392,18 +408,20 @@ class SQLExecutiveAnalyzer:
             LIMIT 15;
             """
             df7 = pd.read_sql(text(q7), conn)
-            lines.extend([
-                "## 7. Estimated Platform Contribution-Margin Scenario Analysis",
-                "",
-                "**Business Question**: Assuming a 12% marketplace commission, payment processing fees (2% CC / 1% Boleto), and a $15 BRL customer voucher per late delivery, what is the net platform contribution margin across major categories?",
-                "",
-                df7.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: `health_beauty`, `watches_gifts`, and `bed_bath_table` yield the highest net cash contributions (> $80k BRL each), with net margin efficiency hovering around **9.0% to 9.6%** after fulfillment remedies.",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 7. Estimated Platform Contribution-Margin Scenario Analysis",
+                    "",
+                    "**Business Question**: Assuming a 12% marketplace commission, payment processing fees (2% CC / 1% Boleto), and a $15 BRL customer voucher per late delivery, what is the net platform contribution margin across major categories?",
+                    "",
+                    df7.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: `health_beauty`, `watches_gifts`, and `bed_bath_table` yield the highest net cash contributions (> $80k BRL each), with net margin efficiency hovering around **9.0% to 9.6%** after fulfillment remedies.",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
             # 8. High-Risk Seller Operational Exposure
             logger.info("Running Analysis 8: High-Risk Seller Exposure...")
@@ -430,15 +448,17 @@ class SQLExecutiveAnalyzer:
             LIMIT 10;
             """
             df8 = pd.read_sql(text(q8), conn)
-            lines.extend([
-                "## 8. High-Risk Merchant Operational Exposure",
-                "",
-                "**Business Question**: Which high-volume merchants generate unacceptably high late-delivery rates (> 15%), exposing significant marketplace GMV to customer dissatisfaction?",
-                "",
-                df8.to_markdown(index=False),
-                "",
-                "**Executive Takeaway**: These merchants represent the core operational risk candidates for vendor onboarding reviews, fulfillment SLA penalties, or integration with preferred logistics carriers.",
-            ])
+            lines.extend(
+                [
+                    "## 8. High-Risk Merchant Operational Exposure",
+                    "",
+                    "**Business Question**: Which high-volume merchants generate unacceptably high late-delivery rates (> 15%), exposing significant marketplace GMV to customer dissatisfaction?",
+                    "",
+                    df8.to_markdown(index=False),
+                    "",
+                    "**Executive Takeaway**: These merchants represent the core operational risk candidates for vendor onboarding reviews, fulfillment SLA penalties, or integration with preferred logistics carriers.",
+                ]
+            )
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))

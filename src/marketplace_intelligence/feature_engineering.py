@@ -17,9 +17,7 @@ Generates comprehensive order-level feature store from cleaned processed dataset
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -32,7 +30,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def haversine_distance(lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: pd.Series) -> pd.Series:
+def haversine_distance(
+    lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: pd.Series
+) -> pd.Series:
     """Calculates great-circle distance between two GPS points in kilometers using the Haversine formula."""
     r_earth = 6371.0  # Earth radius in kilometers
 
@@ -41,7 +41,10 @@ def haversine_distance(lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: 
     delta_phi = np.radians(lat2 - lat1)
     delta_lambda = np.radians(lon2 - lon1)
 
-    a = np.sin(delta_phi / 2.0) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2.0) ** 2
+    a = (
+        np.sin(delta_phi / 2.0) ** 2
+        + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2.0) ** 2
+    )
     c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
     return r_earth * c
 
@@ -49,7 +52,11 @@ def haversine_distance(lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: 
 class FeatureEngineer:
     """Constructs order-grain analytical and predictive feature stores."""
 
-    def __init__(self, processed_dir: Path | str = "data/processed", docs_dir: Path | str = "docs"):
+    def __init__(
+        self,
+        processed_dir: Path | str = "data/processed",
+        docs_dir: Path | str = "docs",
+    ):
         self.processed_dir = Path(processed_dir)
         self.docs_dir = Path(docs_dir)
         self.docs_dir.mkdir(parents=True, exist_ok=True)
@@ -60,13 +67,17 @@ class FeatureEngineer:
 
         orders = pd.read_parquet(self.processed_dir / "orders_cleaned.parquet")
         items = pd.read_parquet(self.processed_dir / "order_items_cleaned.parquet")
-        payments = pd.read_parquet(self.processed_dir / "order_payments_cleaned.parquet")
+        payments = pd.read_parquet(
+            self.processed_dir / "order_payments_cleaned.parquet"
+        )
         products = pd.read_parquet(self.processed_dir / "products_cleaned.parquet")
         customers = pd.read_parquet(self.processed_dir / "customers_cleaned.parquet")
         sellers = pd.read_parquet(self.processed_dir / "sellers_cleaned.parquet")
         geo = pd.read_parquet(self.processed_dir / "geolocation_cleaned.parquet")
 
-        logger.info("1. Engineering order item, basket, and product physical features...")
+        logger.info(
+            "1. Engineering order item, basket, and product physical features..."
+        )
         item_features = self._engineer_item_features(items, products)
 
         logger.info("2. Engineering payment method and financing features...")
@@ -80,22 +91,32 @@ class FeatureEngineer:
         # Impute missing items/payments for canceled orders (e.g. orders canceled prior to itemization)
         base["order_item_count"] = base["order_item_count"].fillna(0).astype(int)
         base["order_total_item_value"] = base["order_total_item_value"].fillna(0.0)
-        base["order_total_freight_value"] = base["order_total_freight_value"].fillna(0.0)
-        base["order_total_value"] = base["order_total_item_value"] + base["order_total_freight_value"]
+        base["order_total_freight_value"] = base["order_total_freight_value"].fillna(
+            0.0
+        )
+        base["order_total_value"] = (
+            base["order_total_item_value"] + base["order_total_freight_value"]
+        )
         base["freight_ratio"] = np.where(
             base["order_total_value"] > 0,
             base["order_total_freight_value"] / base["order_total_value"],
             0.0,
         )
-        base["is_multi_seller"] = (base["order_unique_seller_count"].fillna(0) > 1).astype(int)
+        base["is_multi_seller"] = (
+            base["order_unique_seller_count"].fillna(0) > 1
+        ).astype(int)
 
         logger.info("4. Attaching seller location and calculating spatial distances...")
         base = self._attach_spatial_features(base, sellers, geo)
 
-        logger.info("5. Engineering temporal, calendar, and operational SLA duration features...")
+        logger.info(
+            "5. Engineering temporal, calendar, and operational SLA duration features..."
+        )
         base = self._engineer_temporal_features(base)
 
-        logger.info("6. Calculating expanding historical seller performance without future leakage...")
+        logger.info(
+            "6. Calculating expanding historical seller performance without future leakage..."
+        )
         base = self._engineer_historical_seller_performance(base)
 
         logger.info("7. Constructing ground-truth late delivery target variables...")
@@ -106,41 +127,61 @@ class FeatureEngineer:
         output_csv = self.processed_dir / "order_features.csv"
         base.to_parquet(output_parquet, index=False)
         base.to_csv(output_csv, index=False)
-        logger.info(f"Order feature store exported to {output_parquet.name} ({len(base):,} rows, {len(base.columns)} features)")
+        logger.info(
+            f"Order feature store exported to {output_parquet.name} ({len(base):,} rows, {len(base.columns)} features)"
+        )
 
         # Generate documentation
         self._generate_feature_dictionary(base)
         return base
 
-    def _engineer_item_features(self, items: pd.DataFrame, products: pd.DataFrame) -> pd.DataFrame:
+    def _engineer_item_features(
+        self, items: pd.DataFrame, products: pd.DataFrame
+    ) -> pd.DataFrame:
         """Aggregates item line items up to the order grain."""
         # Join product attributes
         items_prod = pd.merge(
             items,
-            products[[
-                "product_id",
-                "product_category_name_english",
-                "product_weight_g",
-                "product_length_cm",
-                "product_height_cm",
-                "product_width_cm",
-            ]],
+            products[
+                [
+                    "product_id",
+                    "product_category_name_english",
+                    "product_weight_g",
+                    "product_length_cm",
+                    "product_height_cm",
+                    "product_width_cm",
+                ]
+            ],
             on="product_id",
             how="left",
         )
 
         # Compute cubic volume in cm3
         items_prod["product_volume_cm3"] = (
-            items_prod["product_length_cm"] * items_prod["product_height_cm"] * items_prod["product_width_cm"]
+            items_prod["product_length_cm"]
+            * items_prod["product_height_cm"]
+            * items_prod["product_width_cm"]
         )
 
         # Identify primary seller and category (highest price item in each order)
-        items_sorted = items_prod.sort_values(["order_id", "price"], ascending=[True, False])
-        primary_seller = items_sorted.groupby("order_id")["seller_id"].first().rename("primary_seller_id")
-        primary_category = (
-            items_sorted.groupby("order_id")["product_category_name_english"].first().rename("primary_product_category")
+        items_sorted = items_prod.sort_values(
+            ["order_id", "price"], ascending=[True, False]
         )
-        latest_shipping_limit = items_sorted.groupby("order_id")["shipping_limit_date"].max().rename("max_shipping_limit_date")
+        primary_seller = (
+            items_sorted.groupby("order_id")["seller_id"]
+            .first()
+            .rename("primary_seller_id")
+        )
+        primary_category = (
+            items_sorted.groupby("order_id")["product_category_name_english"]
+            .first()
+            .rename("primary_product_category")
+        )
+        latest_shipping_limit = (
+            items_sorted.groupby("order_id")["shipping_limit_date"]
+            .max()
+            .rename("max_shipping_limit_date")
+        )
 
         # Aggregations at order grain
         agg_items = items_prod.groupby("order_id").agg(
@@ -154,14 +195,25 @@ class FeatureEngineer:
             order_total_volume_cm3=("product_volume_cm3", "sum"),
         )
 
-        res = agg_items.join(primary_seller).join(primary_category).join(latest_shipping_limit).reset_index()
+        res = (
+            agg_items.join(primary_seller)
+            .join(primary_category)
+            .join(latest_shipping_limit)
+            .reset_index()
+        )
         return res
 
     def _engineer_payment_features(self, payments: pd.DataFrame) -> pd.DataFrame:
         """Aggregates payment transactions up to the order grain."""
         # Find primary payment tender (the one with the largest payment value)
-        pay_sorted = payments.sort_values(["order_id", "payment_value"], ascending=[True, False])
-        primary_type = pay_sorted.groupby("order_id")["payment_type"].first().rename("primary_payment_type")
+        pay_sorted = payments.sort_values(
+            ["order_id", "payment_value"], ascending=[True, False]
+        )
+        primary_type = (
+            pay_sorted.groupby("order_id")["payment_type"]
+            .first()
+            .rename("primary_payment_type")
+        )
 
         agg_pay = payments.groupby("order_id").agg(
             payment_split_count=("payment_sequential", "count"),
@@ -180,7 +232,9 @@ class FeatureEngineer:
         # Merge seller metadata
         base = pd.merge(
             base,
-            sellers[["seller_id", "seller_zip_code_prefix", "seller_city", "seller_state"]],
+            sellers[
+                ["seller_id", "seller_zip_code_prefix", "seller_city", "seller_state"]
+            ],
             left_on="primary_seller_id",
             right_on="seller_id",
             how="left",
@@ -189,7 +243,9 @@ class FeatureEngineer:
         # Merge customer geo coordinates
         base = pd.merge(
             base,
-            geo[["geolocation_zip_code_prefix", "geolocation_lat", "geolocation_lng"]].rename(
+            geo[
+                ["geolocation_zip_code_prefix", "geolocation_lat", "geolocation_lng"]
+            ].rename(
                 columns={
                     "geolocation_zip_code_prefix": "customer_zip_code_prefix",
                     "geolocation_lat": "customer_lat",
@@ -203,7 +259,9 @@ class FeatureEngineer:
         # Merge seller geo coordinates
         base = pd.merge(
             base,
-            geo[["geolocation_zip_code_prefix", "geolocation_lat", "geolocation_lng"]].rename(
+            geo[
+                ["geolocation_zip_code_prefix", "geolocation_lat", "geolocation_lng"]
+            ].rename(
                 columns={
                     "geolocation_zip_code_prefix": "seller_zip_code_prefix",
                     "geolocation_lat": "seller_lat",
@@ -231,7 +289,9 @@ class FeatureEngineer:
 
         # Impute missing distance with state median or overall national median
         overall_median_dist = float(base["haversine_distance_km"].median())
-        base["haversine_distance_km"] = base["haversine_distance_km"].fillna(overall_median_dist)
+        base["haversine_distance_km"] = base["haversine_distance_km"].fillna(
+            overall_median_dist
+        )
         return base
 
     def _engineer_temporal_features(self, base: pd.DataFrame) -> pd.DataFrame:
@@ -270,7 +330,9 @@ class FeatureEngineer:
         ).dt.total_seconds() / 86400.0
         return base
 
-    def _engineer_historical_seller_performance(self, base: pd.DataFrame) -> pd.DataFrame:
+    def _engineer_historical_seller_performance(
+        self, base: pd.DataFrame
+    ) -> pd.DataFrame:
         """Calculates historical seller late rate using strictly expanding historical windows without future data leakage."""
         # Sort chronologically by purchase timestamp
         sorted_orders = base.sort_values("order_purchase_timestamp").copy()
@@ -278,29 +340,40 @@ class FeatureEngineer:
         # Temporary target: was the order delivered late?
         temp_is_late = (
             (sorted_orders["order_delivered_customer_date"].notna())
-            & (sorted_orders["order_delivered_customer_date"] > sorted_orders["order_estimated_delivery_date"])
+            & (
+                sorted_orders["order_delivered_customer_date"]
+                > sorted_orders["order_estimated_delivery_date"]
+            )
         ).astype(int)
 
         sorted_orders["_temp_late"] = temp_is_late
 
         # Expanding window per primary seller
         # Count of prior orders strictly before current row
-        sorted_orders["seller_prior_order_count"] = sorted_orders.groupby("primary_seller_id").cumcount()
+        sorted_orders["seller_prior_order_count"] = sorted_orders.groupby(
+            "primary_seller_id"
+        ).cumcount()
         # Count of prior late orders strictly before current row
         sorted_orders["seller_prior_late_count"] = (
-            sorted_orders.groupby("primary_seller_id")["_temp_late"].cumsum() - sorted_orders["_temp_late"]
+            sorted_orders.groupby("primary_seller_id")["_temp_late"].cumsum()
+            - sorted_orders["_temp_late"]
         )
 
         # Expanding historical late rate (0.0 if seller has no prior history or no seller)
         sorted_orders["seller_prior_late_rate"] = np.where(
             sorted_orders["seller_prior_order_count"] > 0,
-            sorted_orders["seller_prior_late_count"] / sorted_orders["seller_prior_order_count"],
+            sorted_orders["seller_prior_late_count"]
+            / sorted_orders["seller_prior_order_count"],
             0.0,
         )
 
         # Impute orders without items/seller (775 canceled orders) with 0
-        sorted_orders["seller_prior_order_count"] = sorted_orders["seller_prior_order_count"].fillna(0).astype(int)
-        sorted_orders["seller_prior_late_rate"] = sorted_orders["seller_prior_late_rate"].fillna(0.0)
+        sorted_orders["seller_prior_order_count"] = (
+            sorted_orders["seller_prior_order_count"].fillna(0).astype(int)
+        )
+        sorted_orders["seller_prior_late_rate"] = sorted_orders[
+            "seller_prior_late_rate"
+        ].fillna(0.0)
 
         # Drop temporary column and restore original index order
         sorted_orders = sorted_orders.drop(columns=["_temp_late"])
@@ -312,7 +385,8 @@ class FeatureEngineer:
         # Positive = delivered after estimate (LATE)
         # Negative or 0 = delivered on or before estimate (ON TIME)
         base["delivery_delay_days"] = (
-            base["order_delivered_customer_date"] - base["order_estimated_delivery_date"]
+            base["order_delivered_customer_date"]
+            - base["order_estimated_delivery_date"]
         ).dt.total_seconds() / 86400.0
 
         # Binary classification target: 1 = Late, 0 = On Time
@@ -333,7 +407,9 @@ class FeatureEngineer:
         total_orders = len(df)
         delivered_orders = int(df["is_delivered"].sum())
         late_orders = int((df["is_late_delivery"] == 1.0).sum())
-        late_rate = (late_orders / delivered_orders) * 100 if delivered_orders > 0 else 0.0
+        late_rate = (
+            (late_orders / delivered_orders) * 100 if delivered_orders > 0 else 0.0
+        )
 
         lines: list[str] = [
             "# Feature Store Dictionary & Availability Timeline",
